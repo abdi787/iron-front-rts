@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>IRON FRONT // 16-Unit 3D ↔ Pixel Art Showcase</title>
+<style>
+  :root {
+    --bg: #202124;
+    --bg-in: #282a30;
+    --bg-out: #16171b;
+    --dock: rgba(20, 22, 27, 0.88);
+    --border: rgba(255, 255, 255, 0.09);
+    --border-hi: rgba(86, 194, 255, 0.55);
+    --text: #eceef2;
+    --muted: #989ca8;
+    --accent: #56c2ff;
+    --amber: #f59e0b;
+    --red: #e0463c;
+    --olive: #87a343;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(circle at 50% 45%, #7d5b3d 0%, #64472e 58%, #412d1d 100%);
+    color: var(--text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    user-select: none;
+    touch-action: none;
+  }
+
+  body.studio-bg {
+    background: radial-gradient(circle at 50% 44%, var(--bg-in) 0%, var(--bg) 56%, var(--bg-out) 100%);
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: max(8px, env(safe-area-inset-top, 8px)) 12px 4px;
+    z-index: 10;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .brand-flags {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .flag-badge {
+    width: 22px;
+    height: 13px;
+    border: 1px solid #0e0e11;
+    border-radius: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+  }
+  .flag-badge.red { background: #8c1712; }
+  .flag-badge.green { background: #485623; }
+
+  .brand-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+  }
+
+  .top-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .seg {
+    display: inline-flex;
+    background: rgba(14, 15, 19, 0.78);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+  }
+
+  .seg button, .pill-btn {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 4px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background 0.14s, color 0.14s;
+  }
+
+  .seg button:hover, .pill-btn:hover { color: var(--text); }
+  .seg button.active { background: rgba(255, 255, 255, 0.14); color: #fff; }
+  .seg.mode-seg button.active { background: var(--amber); color: #141118; font-weight: 700; }
+  .seg.fac-seg button[data-fac="red"].active { background: rgba(224, 70, 60, 0.88); color: #fff; }
+  .seg.fac-seg button[data-fac="green"].active { background: rgba(105, 130, 44, 0.92); color: #fff; }
+
+  .pill-btn {
+    background: rgba(14, 15, 19, 0.78);
+    border: 1px solid var(--border);
+    padding: 5px 9px;
+    border-radius: 8px;
+  }
+  .pill-btn.active { border-color: var(--border-hi); color: var(--accent); background: rgba(20, 32, 46, 0.85); }
+
+  .stage {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  #glCanvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    cursor: grab;
+  }
+  #glCanvas:active { cursor: grabbing; }
+
+  .grid-overlay {
+    position: absolute;
+    display: grid;
+    pointer-events: none;
+  }
+  .grid-overlay.hidden { display: none; }
+
+  .grid-hit {
+    position: relative;
+    pointer-events: auto;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.16s;
+  }
+  .grid-hit:hover { background: rgba(255, 255, 255, 0.045); }
+
+  .grid-hit span {
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    color: rgba(255, 248, 238, 0.72);
+    background: rgba(14, 14, 18, 0.48);
+    padding: 1px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .grid-hit.red span { border-left: 2px solid var(--red); }
+  .grid-hit.green span { border-left: 2px solid var(--olive); }
+  .grid-hit:hover span { color: #fff; background: rgba(14, 14, 18, 0.85); }
+
+  .focus-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    display: none;
+  }
+  .focus-overlay.active { display: block; }
+
+  .nav-arrow {
+    position: absolute;
+    top: 48%;
+    transform: translateY(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: rgba(16, 17, 21, 0.68);
+    color: var(--muted);
+    font: inherit;
+    font-size: 16px;
+    cursor: pointer;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .nav-arrow:hover { color: #fff; border-color: rgba(255,255,255,0.28); }
+  .nav-prev { left: 10px; }
+  .nav-next { right: 10px; }
+
+  .focus-caption {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    background: rgba(16, 17, 21, 0.72);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 12px;
+    white-space: nowrap;
+  }
+  .focus-caption strong { color: var(--text); }
+
+  .split-line {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(245, 158, 11, 0.85);
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.55);
+    z-index: 6;
+    display: none;
+    pointer-events: none;
+  }
+  .split-line.active { display: block; }
+
+  .split-handle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--amber);
+    color: #141118;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    cursor: ew-resize;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  }
+
+  .split-tag {
+    position: absolute;
+    top: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: rgba(16, 17, 21, 0.78);
+    border: 1px solid var(--border);
+    pointer-events: none;
+    display: none;
+    z-index: 5;
+  }
+  .split-tag.active { display: block; }
+  .split-tag.left { left: 12px; color: var(--accent); }
+  .split-tag.right { right: 12px; color: var(--amber); }
+
+  .dock-wrap {
+    padding: 4px 10px max(10px, env(safe-area-inset-bottom, 10px));
+    display: flex;
+    justify-content: center;
+    z-index: 12;
+    flex-shrink: 0;
+  }
+
+  .dock {
+    width: 100%;
+    max-width: 780px;
+    background: var(--dock);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
+  }
+
+  .dock-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .act-btn {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text);
+    font: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 5px 9px;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .act-btn:hover { background: rgba(255, 255, 255, 0.10); }
+  .act-btn.primary { border-color: rgba(86, 194, 255, 0.4); background: rgba(86, 194, 255, 0.14); color: #cdeeff; }
+  .act-btn.active { border-color: rgba(86, 194, 255, 0.6); background: rgba(86, 194, 255, 0.24); color: #fff; }
+
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .slider-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+  }
+
+  .slider-item span { font-size: 10px; color: var(--muted); white-space: nowrap; }
+  .slider-item small { font-size: 10px; color: var(--text); min-width: 34px; text-align: right; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1;
+    min-width: 50px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid #16181d;
+  }
+
+  @media (max-width: 560px) {
+    .topbar { padding: max(6px, env(safe-area-inset-top, 6px)) 8px 2px; }
+    .seg button { padding: 4px 6px; font-size: 9px; }
+    .grid-hit span { font-size: 8px; bottom: 2px; padding: 1px 4px; }
+    .focus-caption { font-size: 10px; padding: 4px 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-flags">
+        <span class="flag-badge red" title="Red Dominion">
+          <svg width="14" height="9" viewBox="0 0 14 9" fill="none">
+            <path d="M2 2C2 5 4 7.5 7 8C10 7.5 12 5 12 2" stroke="#fff" stroke-width="1.1"/>
+            <path d="M4.5 2.5L7 5.5L9.5 2.5L7 3.5Z" fill="#fff"/>
+          </svg>
+        </span>
+        <span class="flag-badge green" title="Olive Vanguard">
+          <svg width="14" height="9" viewBox="0 0 14 9" fill="none">
+            <polygon points="7,1 8.1,3.5 10.8,3.6 8.6,5.2 9.4,7.8 7,6.2 4.6,7.8 5.4,5.2 3.2,3.6 5.9,3.5" fill="#fff"/>
+            <path d="M1 4.5H3.2M10.8 4.5H13" stroke="#fff" stroke-width="1.2"/>
+          </svg>
+        </span>
+      </div>
+      <span class="brand-title">ARMY SHOWCASE (16)</span>
+      <a class="pill-btn" href="index.html" title="Вернуться в игру IRON FRONT">← Игра</a>
+    </div>
+
+    <div class="top-right">
+      <div class="seg mode-seg" id="renderModeSeg" title="Переключение: 3D модель ↔ Pixel Art">
+        <button data-mode="3d">3D Модель</button>
+        <button data-mode="split">Сплит</button>
+        <button data-mode="pixel" class="active">Pixel Art</button>
+      </div>
+
+      <div class="seg" id="viewSeg">
+        <button data-view="grid" class="active">Сетка</button>
+        <button data-view="focus">Фокус</button>
+      </div>
+
+      <div class="seg fac-seg" id="facSeg">
+        <button data-fac="all" class="active">Все 16</button>
+        <button data-fac="red">Красные</button>
+        <button data-fac="green">Зелёные</button>
+      </div>
+
+      <button class="pill-btn active" id="spinBtn" title="Автовращение">↻</button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="glCanvas"></canvas>
+    <div class="grid-overlay" id="gridOverlay"></div>
+
+    <div class="focus-overlay" id="focusOverlay">
+      <button class="nav-arrow nav-prev" id="prevBtn">‹</button>
+      <button class="nav-arrow nav-next" id="nextBtn">›</button>
+      <div class="focus-caption">
+        <strong id="focusName">R1 · RECON BUGGY</strong>
+        <span id="focusMeta">Pixel Art · High</span>
+      </div>
+    </div>
+
+    <div class="split-tag left" id="splitTagL">3D МОДЕЛЬ (HiDPI)</div>
+    <div class="split-tag right" id="splitTagR">PIXEL ART (FBO)</div>
+    <div class="split-line" id="splitLine">
+      <div class="split-handle" id="splitHandle">⇄</div>
+    </div>
+  </main>
+
+  <div class="dock-wrap">
+    <div class="dock">
+      <div class="dock-row">
+        <div style="display:flex; gap:5px; flex-wrap:wrap; align-items:center;">
+          <button class="act-btn primary" id="assembleBtn">▼ Собрать</button>
+          <button class="act-btn" id="disassembleBtn">▲ Разобрать</button>
+          <button class="act-btn" id="cycleBtn">∞ Цикл</button>
+          <button class="act-btn active" id="steppedBtn" title="20 FPS анимация и 32 шага поворота">20fps·32</button>
+          <button class="act-btn active" id="bgBtn" title="Фон: пустыня / студия">Песок</button>
+        </div>
+
+        <div class="seg" id="resSeg" title="Разрешение Pixel Art FBO (мгновенно)">
+          <button data-res="low">Low</button>
+          <button data-res="med">Med</button>
+          <button data-res="high" class="active">High</button>
+          <button data-res="xhigh">XHigh</button>
+          <button data-res="max">Max</button>
+        </div>
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-item">
+          <span>3D-Печать / Срез</span>
+          <input type="range" id="buildSlider" min="0" max="100" value="100" />
+          <small id="buildVal">100%</small>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/mesh_core.js"></script>
+<script src="js/units_meshes.js"></script>
+<script>
+(() => {
+  'use strict';
+  const { buildUnitMeshes } = window.FRONTLINE.UNIT_MESHES;
+
+  function mat4Id() { const m = new Float32Array(16); m[0]=m[5]=m[10]=m[15]=1; return m; }
+  function mat4Mul(out, a, b) {
+    for (let c = 0; c < 4; c++) {
+      const b0=b[c*4], b1=b[c*4+1], b2=b[c*4+2], b3=b[c*4+3];
+      out[c*4]   = a[0]*b0 + a[4]*b1 + a[8]*b2  + a[12]*b3;
+      out[c*4+1] = a[1]*b0 + a[5]*b1 + a[9]*b2  + a[13]*b3;
+      out[c*4+2] = a[2]*b0 + a[6]*b1 + a[10]*b2 + a[14]*b3;
+      out[c*4+3] = a[3]*b0 + a[7]*b1 + a[11]*b2 + a[15]*b3;
+    }
+    return out;
+  }
+  function mat4TRS(out, tx, ty, tz, rx, ry, rz, sx=1, sy=1, sz=1) {
+    const cx=Math.cos(rx), sxr=Math.sin(rx), cy=Math.cos(ry), syr=Math.sin(ry), cz=Math.cos(rz), szr=Math.sin(rz);
+    out[0]=(cz*cy)*sx;               out[1]=(szr*cy)*sx;               out[2]=(-syr)*sx;     out[3]=0;
+    out[4]=(cz*syr*sxr - szr*cx)*sy; out[5]=(szr*syr*sxr + cz*cx)*sy;  out[6]=(cy*sxr)*sy;   out[7]=0;
+    out[8]=(cz*syr*cx + szr*sxr)*sz; out[9]=(szr*syr*cx - cz*sxr)*sz;  out[10]=(cy*cx)*sz;   out[11]=0;
+    out[12]=tx;                      out[13]=ty;                       out[14]=tz;           out[15]=1;
+    return out;
+  }
+
+  const RES_CFG = {
+    low:   { texelsPerWorld: 0.58, bands: 6,  grain: 0.11,  label: 'Low (~24px)'  },
+    med:   { texelsPerWorld: 0.92, bands: 10, grain: 0.095, label: 'Med (~40px)'  },
+    high:  { texelsPerWorld: 1.38, bands: 16, grain: 0.08,  label: 'High (~60px)' },
+    xhigh: { texelsPerWorld: 2.02, bands: 28, grain: 0.055, label: 'XHigh (~90px)'},
+    max:   { texelsPerWorld: 2.85, bands: 0,  grain: 0.035, label: 'Max (~128px)' }
+  };
+
+  const CATALOG = [
+    // 8 Red Dominion
+    { id: 'red_buggy',         code: 'R1', name: 'RECON BUGGY',       fac: 'red',   span: 72, midZ: 12 },
+    { id: 'red_light_tank',    code: 'R2', name: 'LIGHT TANK',        fac: 'red',   span: 74, midZ: 12 },
+    { id: 'red_halftrack',     code: 'R3', name: 'HALF-TRACK TANK',   fac: 'red',   span: 74, midZ: 12 },
+    { id: 'red_apc_truck',     code: 'R4', name: 'TRACKED CARRIER',   fac: 'red',   span: 78, midZ: 14 },
+    { id: 'red_flame_tank',    code: 'R5', name: 'FLAME SIEGE TANK',  fac: 'red',   span: 78, midZ: 13 },
+    { id: 'red_supply_truck',  code: 'R6', name: 'SUPPLY TRUCK',      fac: 'red',   span: 76, midZ: 14 },
+    { id: 'red_mortar',        code: 'R7', name: 'SIEGE MORTAR',      fac: 'red',   span: 78, midZ: 14 },
+    { id: 'red_orb_disruptor', code: 'R8', name: 'OBSIDIAN ORB',      fac: 'red',   span: 78, midZ: 16 },
+    // 8 Olive Vanguard
+    { id: 'green_humvee',        code: 'G1', name: 'RECON 4×4',        fac: 'green', span: 72, midZ: 12 },
+    { id: 'green_medium_tank',   code: 'G2', name: 'MEDIUM TANK',      fac: 'green', span: 76, midZ: 13 },
+    { id: 'green_missile_truck', code: 'G3', name: 'MISSILE CARRIER',  fac: 'green', span: 80, midZ: 16 },
+    { id: 'green_apc_8x8',       code: 'G4', name: '8×8 WHEELED APC',  fac: 'green', span: 78, midZ: 12 },
+    { id: 'green_ion_tank',      code: 'G5', name: 'ION HEAVY TANK',   fac: 'green', span: 82, midZ: 13 },
+    { id: 'green_supply_truck',  code: 'G6', name: 'ARMY SUPPLY',      fac: 'green', span: 76, midZ: 14 },
+    { id: 'green_laser_tank',    code: 'G7', name: 'CYCLOPS LASER',    fac: 'green', span: 74, midZ: 13 },
+    { id: 'green_radar_truck',   code: 'G8', name: 'EMP RADAR TRUCK',  fac: 'green', span: 82, midZ: 18 }
+  ];
+
+  const canvas = document.getElementById('glCanvas');
+  const gl = canvas.getContext('webgl', { alpha: true, antialias: false, depth: true, premultipliedAlpha: true });
+
+  const VERT = `
+    precision mediump float;
+    attribute vec3 aPos;
+    attribute vec3 aNorm;
+    attribute vec3 aCol;
+    attribute float aEm;
+    attribute float aMat;
+    attribute float aAo;
+
+    uniform mat4 uModel;
+    uniform vec2 uCamOffset;
+    uniform vec2 uViewSize;
+    uniform float uPitch;
+    uniform float uShadowPass;
+    uniform float uZMin;
+    uniform float uZMax;
+
+    varying vec3 vNorm;
+    varying vec3 vCol;
+    varying vec3 vModelPos;
+    varying float vEm;
+    varying float vMat;
+    varying float vAo;
+    varying float vNormZ;
+    varying float vHeightZ;
+
+    void main() {
+      vec4 lp = uModel * vec4(aPos, 1.0);
+      vec3 wn = (uModel * vec4(aNorm, 0.0)).xyz;
+      vNormZ = clamp((lp.z - uZMin) / max(0.1, uZMax - uZMin), 0.0, 1.0);
+      vModelPos = aPos;
+
+      float ox = lp.x;
+      float oy = lp.y;
+      float oz = max(0.0, lp.z);
+      vHeightZ = oz;
+
+      if (uShadowPass > 0.5) {
+        ox += oz * 0.72;
+        oy -= oz * 0.36;
+        oz = 0.0;
+      }
+
+      float sinP = sin(uPitch);
+      float cosP = cos(uPitch);
+      float sx = ox - uCamOffset.x;
+      float sy = oy * sinP - oz * cosP - uCamOffset.y;
+
+      float ndcX = sx / (uViewSize.x * 0.5);
+      float ndcY = -(sy / (uViewSize.y * 0.5));
+      float ndcZ = uShadowPass > 0.5
+        ? 0.95
+        : clamp(-(oy * cosP + oz * sinP) / 400.0, -0.90, 0.90);
+
+      gl_Position = vec4(ndcX, ndcY, ndcZ, 1.0);
+      vNorm = wn;
+      vCol = aCol;
+      vEm = aEm;
+      vMat = aMat;
+      vAo = aAo;
+    }
+  `;
+
+  const FRAG = `
+    precision mediump float;
+    uniform float uShadowPass;
+    uniform float uRaw3D;
+    uniform float uShadeBands;
+    uniform float uGrainAmp;
+    uniform float uBuildProg;
+
+    varying vec3 vNorm;
+    varying vec3 vCol;
+    varying vec3 vModelPos;
+    varying float vEm;
+    varying float vMat;
+    varying float vAo;
+    varying float vNormZ;
+    varying float vHeightZ;
+
+    float hash3(vec3 p) {
+      vec3 q = fract(p * vec3(0.1031, 0.1030, 0.0973));
+      q += dot(q, q.yxz + 33.33);
+      return fract((q.x + q.y) * q.z);
+    }
+
+    void main() {
+      if (uBuildProg < 0.999 && vNormZ > uBuildProg) discard;
+      if (uShadowPass > 0.5) {
+        if (uRaw3D > 0.5) {
+          float sa = 0.34;
+          gl_FragColor = vec4(0.04 * sa, 0.04 * sa, 0.05 * sa, sa);
+        } else {
+          gl_FragColor = vec4(0.05, 0.04, 0.04, 0.44);
+        }
+        return;
+      }
+
+      vec3 n = normalize(vNorm);
+      vec3 L = normalize(vec3(-0.65, 0.26, 0.71));
+      float rawDiff = clamp(dot(n, L), -0.35, 1.0);
+      float normDiff = (rawDiff + 0.35) / 1.35;
+      float qDiff = (uRaw3D > 0.5 || uShadeBands < 1.0)
+        ? normDiff
+        : floor(normDiff * uShadeBands + 0.5) / uShadeBands;
+
+      float groundAo = mix(0.78, 1.0, clamp(vHeightZ / 7.5, 0.0, 1.0));
+      float ao = vAo * groundAo;
+      vec3 col = vCol;
+
+      if (vEm < 0.8) {
+        float gScale = uRaw3D > 0.5 ? 0.35 : 1.0;
+        float grain = (hash3(floor(vModelPos * 0.62)) - 0.5) * uGrainAmp * gScale;
+
+        if (vMat > 0.5 && vMat < 1.5) {
+          float rib = step(0.5, fract((vModelPos.x + vModelPos.z * 0.45) * 0.34));
+          col *= mix(0.78, 1.18, rib);
+        } else if (vMat > 1.5 && vMat < 2.5) {
+          float st = step(0.5, fract((vModelPos.y + vModelPos.x * 0.5) * 0.22));
+          col = mix(vec3(0.15, 0.16, 0.19), col, st);
+        } else if (vMat > 2.5 && vMat < 3.5) {
+          float seg = step(0.5, fract(vModelPos.x * 0.20 + vModelPos.z * 0.22));
+          col *= mix(0.86, 1.08, seg);
+        }
+        if (vMat < 3.5) col += grain;
+
+        float light = (0.37 + qDiff * 0.76) * ao;
+        float shadowMix = clamp(1.0 - qDiff, 0.0, 1.0) * 0.32;
+        col = col * light * (1.0 - shadowMix) + vec3(0.094, 0.105, 0.165) * shadowMix;
+
+        if (uRaw3D > 0.5) {
+          float rim = pow(1.0 - clamp(abs(n.z), 0.0, 1.0), 2.0) * 0.09;
+          col += vec3(0.45, 0.65, 0.95) * rim;
+        }
+        float specThresh = vMat > 3.5 ? 0.70 : 0.78;
+        float specAmt = vMat > 3.5 ? 0.90 : 0.46;
+        if (qDiff > specThresh) {
+          col = mix(col, vec3(1.0, 0.98, 0.94), (qDiff - specThresh) * specAmt);
+        }
+      }
+
+      if (uBuildProg < 0.999) {
+        float edge = uBuildProg - vNormZ;
+        if (edge < 0.085) col = mix(col, vec3(0.40, 0.93, 1.0), 0.86);
+        else if (fract(vNormZ * 14.0) < 0.16) col *= 0.83;
+      }
+
+      float outA = uRaw3D > 0.5 ? 1.0 : (0.58 + clamp(vHeightZ / 76.0, 0.0, 1.0) * 0.41);
+      gl_FragColor = vec4(clamp(col, 0.0, 1.0), outA);
+    }
+  `;
+
+  const POST_VERT = `
+    precision mediump float;
+    attribute vec2 aQuad;
+    varying vec2 vUv;
+    void main() { vUv = aQuad * 0.5 + 0.5; gl_Position = vec4(aQuad, 0.0, 1.0); }
+  `;
+
+  const POST_FRAG = `
+    precision mediump float;
+    uniform sampler2D uTex;
+    uniform vec2 uTexel;
+    varying vec2 vUv;
+
+    void main() {
+      vec4 c = texture2D(uTex, vUv);
+      float aL = texture2D(uTex, vUv - vec2(uTexel.x, 0.0)).a;
+      float aR = texture2D(uTex, vUv + vec2(uTexel.x, 0.0)).a;
+      float aU = texture2D(uTex, vUv + vec2(0.0, uTexel.y)).a;
+      float aD = texture2D(uTex, vUv - vec2(0.0, uTexel.y)).a;
+
+      if (c.a >= 0.56) {
+        vec3 col = c.rgb;
+        float stepH = 0.024;
+        if ((aU >= 0.56 && aU - c.a > stepH) || (aL >= 0.56 && aL - c.a > stepH)) {
+          col *= 0.72;
+        } else if ((aD >= 0.56 && c.a - aD > stepH) || (aR >= 0.56 && c.a - aR > stepH)) {
+          col = min(vec3(1.0), col * 1.08);
+        }
+        gl_FragColor = vec4(col, 1.0);
+        return;
+      }
+
+      if (aL >= 0.56 || aR >= 0.56 || aU >= 0.56 || aD >= 0.56) {
+        gl_FragColor = vec4(0.070, 0.065, 0.088, 1.0);
+        return;
+      }
+      if (c.a > 0.1) {
+        float sa = 0.36;
+        gl_FragColor = vec4(c.rgb * sa, sa);
+        return;
+      }
+      gl_FragColor = vec4(0.0);
+    }
+  `;
+
+  function mkProg(vs, fs) {
+    const p = gl.createProgram();
+    const s1 = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(s1, vs); gl.compileShader(s1);
+    const s2 = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(s2, fs); gl.compileShader(s2);
+    gl.attachShader(p, s1); gl.attachShader(p, s2); gl.linkProgram(p);
+    return p;
+  }
+
+  const prog = mkProg(VERT, FRAG);
+  const postProg = mkProg(POST_VERT, POST_FRAG);
+  const L = {};
+  ['aPos','aNorm','aCol','aEm','aMat','aAo'].forEach((k) => L[k] = gl.getAttribLocation(prog, k));
+  ['uModel','uCamOffset','uViewSize','uPitch','uShadowPass','uZMin','uZMax','uRaw3D','uShadeBands','uGrainAmp','uBuildProg']
+    .forEach((k) => L[k] = gl.getUniformLocation(prog, k));
+  const P = {
+    aQuad: gl.getAttribLocation(postProg, 'aQuad'),
+    uTex: gl.getUniformLocation(postProg, 'uTex'),
+    uTexel: gl.getUniformLocation(postProg, 'uTexel')
+  };
+
+  const quadVbo = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, quadVbo);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,-1, 1,1, -1,1]), gl.STATIC_DRAW);
+
+  const M = {};
+  {
+    const raw = buildUnitMeshes();
+    for (const [k, m] of Object.entries(raw)) {
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, m.data, gl.STATIC_DRAW);
+      M[k] = { vbo, count: m.count, minZ: m.minZ, maxZ: m.maxZ };
+    }
+  }
+
+  let fbo = null, fboTex = null, fboDepth = null, fboW = 0, fboH = 0;
+  function ensureFbo(w, h) {
+    if (fboW === w && fboH === h) return;
+    if (fbo) gl.deleteFramebuffer(fbo);
+    if (fboTex) gl.deleteTexture(fboTex);
+    if (fboDepth) gl.deleteRenderbuffer(fboDepth);
+    fboW = w; fboH = h;
+    fboTex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, fboTex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    fboDepth = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, fboDepth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+    fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fboTex, 0);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, fboDepth);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+
+  const mA = mat4Id(), mB = mat4Id(), mC = mat4Id(), mD = mat4Id();
+  const ANIM_FPS = 20;
+  const ANGLE_STOPS = 32;
+  const ANGLE_STEP = (Math.PI * 2) / ANGLE_STOPS;
+  const snapAngle = (a, on) => (on ? Math.round(a / ANGLE_STEP) * ANGLE_STEP : a);
+  const snapTime = (t, on) => (on ? Math.floor(t * ANIM_FPS) / ANIM_FPS : t);
+
+  function collectUnitParts(item, rawYaw, rawT, stepped) {
+    const id = item.id;
+    const parts = [];
+    const push = (mesh, mat, zMin, zMax) => parts.push({ mesh, mat: new Float32Array(mat), zMin, zMax });
+    const t = snapTime(rawT, stepped);
+    const yaw = snapAngle(rawYaw, stepped);
+
+    const bob = Math.sin(t * 7.5) * 0.35;
+    const kickSin = (freq, amp) => {
+      const fp = (t * freq) % 1;
+      return fp < 0.14 ? Math.sin((fp / 0.14) * Math.PI) * amp : 0;
+    };
+
+    if (id === 'red_buggy') {
+      mat4TRS(mA, 0, 0, Math.abs(Math.sin(t * 6.0)) * 0.7, Math.sin(t * 4.0) * 0.03, 0, yaw);
+      push(M.red_buggy_hull, mA, 0, 24);
+      const tYaw = snapAngle(yaw + Math.sin(t * 1.4) * 0.55, stepped);
+      const rec = kickSin(1.8, 1.8);
+      mat4TRS(mB, -rec * Math.cos(tYaw), -rec * Math.sin(tYaw), 17.5 + Math.abs(Math.sin(t * 6.0)) * 0.7, 0, 0, tYaw);
+      push(M.red_buggy_turret, mB, 0, 26);
+    } else if (id === 'red_light_tank' || id === 'red_flame_tank' || id === 'green_medium_tank' || id === 'green_ion_tank') {
+      const rec = kickSin(0.85, id === 'green_ion_tank' ? 2.4 : 4.0);
+      const tZ = id === 'red_light_tank' ? 12.6 : 13.8;
+      const tYaw = snapAngle(yaw + Math.sin(t * 0.9) * 0.52, stepped);
+      mat4TRS(mA, 0, 0, bob * 0.4, 0, 0, yaw);
+      push(M[`${id}_hull`], mA, 0, 30);
+      mat4TRS(mB, 0, 0, tZ + bob * 0.4, 0, 0, tYaw);
+      push(M[`${id}_turret`], mB, 0, 30);
+      mat4TRS(mC, -rec, 0, 0, 0, 0, 0);
+      mat4Mul(mD, mB, mC);
+      push(M[`${id}_barrel`], mD, 0, 30);
+    } else if (id === 'red_halftrack') {
+      const rec = kickSin(1.0, 3.6);
+      const tYaw = snapAngle(yaw + Math.sin(t * 1.0) * 0.50, stepped);
+      mat4TRS(mA, 0, 0, bob * 0.45, 0, 0, yaw);
+      push(M.red_halftrack_hull, mA, 0, 30);
+      const ox = -6.5 * Math.cos(yaw), oy = -6.5 * Math.sin(yaw);
+      mat4TRS(mB, ox, oy, 12.5 + bob * 0.45, 0, 0, tYaw);
+      push(M.red_halftrack_turret, mB, 0, 30);
+      mat4TRS(mC, -rec, 0, 0, 0, 0, 0);
+      mat4Mul(mD, mB, mC);
+      push(M.red_halftrack_barrel, mD, 0, 30);
+    } else if (id === 'red_mortar') {
+      const rec = kickSin(0.55, 4.2);
+      const tYaw = snapAngle(yaw + Math.sin(t * 0.7) * 0.45, stepped);
+      mat4TRS(mA, 0, 0, rec > 0.5 ? -0.6 : 0, 0, rec * 0.015, yaw);
+      push(M.red_mortar_hull, mA, 0, 36);
+      mat4TRS(mB, 0, 0, 14.8, 0, 0, tYaw);
+      push(M.red_mortar_turret, mB, 0, 36);
+      mat4TRS(mC, -rec * 0.79, 0, -rec * 0.61, 0, 0, 0);
+      mat4Mul(mD, mB, mC);
+      push(M.red_mortar_barrel, mD, 0, 36);
+    } else if (id === 'red_orb_disruptor') {
+      mat4TRS(mA, 0, 0, 0, 0, 0, yaw);
+      push(M.red_orb_disruptor_hull, mA, 0, 38);
+      const spin = snapAngle(yaw + t * 0.85, stepped);
+      const ox = -8.5 * Math.cos(yaw), oy = -8.5 * Math.sin(yaw);
+      mat4TRS(mB, ox, oy, 12.2, 0, 0, spin);
+      push(M.red_orb_disruptor_turret, mB, 0, 38);
+      mat4TRS(mC, ox, oy, 23.0 + Math.sin(t * 3.0) * 1.3, 0, 0, spin);
+      push(M.red_orb_disruptor_orb, mC, 0, 38);
+    } else if (id === 'red_apc_truck' || id === 'red_supply_truck' || id === 'green_supply_truck') {
+      const pitch = Math.sin(t * 5.2) * 0.025;
+      const heave = Math.abs(Math.sin(t * 5.2)) * 0.55;
+      mat4TRS(mA, 0, 0, heave, 0, pitch, yaw);
+      push(M[`${id}_hull`], mA, 0, 30);
+    } else if (id === 'green_humvee') {
+      const heave = Math.abs(Math.sin(t * 6.5)) * 0.55;
+      mat4TRS(mA, 0, 0, heave, Math.sin(t * 4.5) * 0.025, 0, yaw);
+      push(M.green_humvee_hull, mA, 0, 26);
+      const tYaw = snapAngle(yaw + Math.sin(t * 1.5) * 0.6, stepped);
+      const rec = kickSin(2.1, 1.6);
+      mat4TRS(mB, -1.5 * Math.cos(yaw) - rec * Math.cos(tYaw), -1.5 * Math.sin(yaw) - rec * Math.sin(tYaw), 18.2 + heave, 0, 0, tYaw);
+      push(M.green_humvee_turret, mB, 0, 26);
+    } else if (id === 'green_missile_truck') {
+      mat4TRS(mA, 0, 0, bob * 0.3, 0, 0, yaw);
+      push(M.green_missile_truck_hull, mA, 0, 38);
+      const tYaw = snapAngle(yaw + Math.sin(t * 0.65) * 0.45, stepped);
+      const ox = -7.5 * Math.cos(yaw), oy = -7.5 * Math.sin(yaw);
+      mat4TRS(mB, ox, oy, 12.2 + bob * 0.3, 0, 0, tYaw);
+      push(M.green_missile_truck_turret, mB, 0, 38);
+    } else if (id === 'green_apc_8x8') {
+      mat4TRS(mA, 0, 0, Math.abs(Math.sin(t * 5.5)) * 0.4, 0, 0, yaw);
+      push(M.green_apc_8x8_hull, mA, 0, 28);
+      const tYaw = snapAngle(yaw + Math.sin(t * 1.3) * 0.65, stepped);
+      const ox = -2.0 * Math.cos(yaw), oy = -2.0 * Math.sin(yaw);
+      mat4TRS(mB, ox, oy, 18.4, 0, 0, tYaw);
+      push(M.green_apc_8x8_turret, mB, 0, 28);
+    } else if (id === 'green_laser_tank') {
+      mat4TRS(mA, 0, 0, bob * 0.35, 0, 0, yaw);
+      push(M.green_laser_tank_hull, mA, 0, 34);
+      const tYaw = snapAngle(yaw + Math.sin(t * 0.95) * 0.58, stepped);
+      mat4TRS(mB, 0, 0, 12.8 + bob * 0.35, 0, 0, tYaw);
+      push(M.green_laser_tank_turret, mB, 0, 34);
+    } else if (id === 'green_radar_truck') {
+      mat4TRS(mA, 0, 0, bob * 0.3, 0, 0, yaw);
+      push(M.green_radar_truck_hull, mA, 0, 44);
+      const ox = -8.5 * Math.cos(yaw), oy = -8.5 * Math.sin(yaw);
+      mat4TRS(mB, ox, oy, 12.2, 0, 0, snapAngle(yaw + t * 1.4, stepped));
+      push(M.green_radar_truck_turret, mB, 0, 44);
+    }
+    return parts;
+  }
+
+  function bindPart(mesh) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+    gl.vertexAttribPointer(L.aPos, 3, gl.FLOAT, false, 48, 0);
+    gl.vertexAttribPointer(L.aNorm, 3, gl.FLOAT, false, 48, 12);
+    gl.vertexAttribPointer(L.aCol, 3, gl.FLOAT, false, 48, 24);
+    gl.vertexAttribPointer(L.aEm, 1, gl.FLOAT, false, 48, 36);
+    gl.vertexAttribPointer(L.aMat, 1, gl.FLOAT, false, 48, 40);
+    gl.vertexAttribPointer(L.aAo, 1, gl.FLOAT, false, 48, 44);
+  }
+
+  function drawItemInViewport(item, vpX, vpY, vpW, vpH, yaw, t, raw3D, bands, grainAmp, buildProg, pitch) {
+    const useStepped = !raw3D && state.stepped;
+    const parts = collectUnitParts(item, yaw, t, useStepped);
+    const aspect = vpW / Math.max(1, vpH);
+    const viewW = aspect >= 1 ? item.span * aspect : item.span;
+    const viewH = aspect >= 1 ? item.span : item.span / aspect;
+
+    gl.viewport(vpX, vpY, vpW, vpH);
+    gl.scissor(vpX, vpY, vpW, vpH);
+    gl.uniform2f(L.uViewSize, viewW, viewH);
+    gl.uniform2f(L.uCamOffset, 3.0, -item.midZ * Math.cos(pitch) * 0.72);
+    gl.uniform1f(L.uPitch, pitch);
+    gl.uniform1f(L.uRaw3D, raw3D ? 1.0 : 0.0);
+    gl.uniform1f(L.uShadeBands, bands);
+    gl.uniform1f(L.uGrainAmp, grainAmp);
+    const effBuild = (useStepped && buildProg > 0.001 && buildProg < 0.999)
+      ? Math.floor(buildProg * ANIM_FPS) / ANIM_FPS
+      : buildProg;
+    gl.uniform1f(L.uBuildProg, effBuild);
+
+    gl.depthFunc(gl.LESS);
+    gl.uniform1f(L.uShadowPass, 1.0);
+    for (const p of parts) {
+      bindPart(p.mesh);
+      gl.uniformMatrix4fv(L.uModel, false, p.mat);
+      gl.uniform1f(L.uZMin, p.zMin);
+      gl.uniform1f(L.uZMax, p.zMax);
+      gl.drawArrays(gl.TRIANGLES, 0, p.mesh.count);
+    }
+
+    gl.depthFunc(gl.LEQUAL);
+    gl.uniform1f(L.uShadowPass, 0.0);
+    for (const p of parts) {
+      bindPart(p.mesh);
+      gl.uniformMatrix4fv(L.uModel, false, p.mat);
+      gl.uniform1f(L.uZMin, p.zMin);
+      gl.uniform1f(L.uZMax, p.zMax);
+      gl.drawArrays(gl.TRIANGLES, 0, p.mesh.count);
+    }
+  }
+
+  const state = {
+    renderMode: 'pixel',
+    view: 'grid',
+    faction: 'all',
+    res: 'high',
+    selectedIdx: 0,
+    autoSpin: true,
+    stepped: true,
+    desertBg: true,
+    yaw: 0.65,
+    pitch: 0.68,
+    buildProg: 0,
+    buildTarget: 1,
+    cycleMode: false,
+    cycleTimer: 0,
+    splitFrac: 0.5,
+    draggingStage: false,
+    draggingSplit: false,
+    lastX: 0,
+    lastY: 0
+  };
+
+  const getActiveCatalog = () => (state.faction === 'all' ? CATALOG : CATALOG.filter((c) => c.fac === state.faction));
+
+  const gridOverlay = document.getElementById('gridOverlay');
+  const focusOverlay = document.getElementById('focusOverlay');
+  const focusNameEl = document.getElementById('focusName');
+  const focusMetaEl = document.getElementById('focusMeta');
+  const splitLine = document.getElementById('splitLine');
+  const splitHandle = document.getElementById('splitHandle');
+  const splitTagL = document.getElementById('splitTagL');
+  const splitTagR = document.getElementById('splitTagR');
+  const buildSlider = document.getElementById('buildSlider');
+  const buildVal = document.getElementById('buildVal');
+
+  function getGridDims(fullW, fullH, count) {
+    if (count > 8) return { cols: 4, rows: 4 };
+    return fullW >= fullH ? { cols: 4, rows: 2 } : { cols: 2, rows: 4 };
+  }
+
+  function rebuildGridOverlay() {
+    gridOverlay.innerHTML = '';
+    const cat = getActiveCatalog();
+    cat.forEach((item, idx) => {
+      const hit = document.createElement('div');
+      hit.className = `grid-hit ${item.fac}`;
+      hit.innerHTML = `<span>${item.code} · ${item.name}</span>`;
+      hit.addEventListener('click', () => {
+        state.selectedIdx = idx;
+        setView('focus');
+      });
+      gridOverlay.appendChild(hit);
+    });
+    updateFocusMeta();
+  }
+
+  function updateFocusMeta() {
+    const cat = getActiveCatalog();
+    if (state.selectedIdx >= cat.length) state.selectedIdx = 0;
+    const item = cat[state.selectedIdx];
+    focusNameEl.textContent = `${item.code} · ${item.name}`;
+    const stepTxt = state.stepped ? ' · 20fps · 32 стопа' : ' · 60fps';
+    const facName = item.fac === 'red' ? 'Красные' : 'Зелёные';
+    focusMetaEl.textContent = state.renderMode === '3d'
+      ? `${facName} · 3D Raw (60fps HiDPI)`
+      : state.renderMode === 'split'
+        ? `${facName} · Split | ${RES_CFG[state.res].label}${stepTxt}`
+        : `${facName} · Pixel Art · ${RES_CFG[state.res].label}${stepTxt}`;
+    splitTagR.textContent = state.stepped ? 'PIXEL ART (20fps · 32ст)' : 'PIXEL ART (60fps)';
+  }
+
+  function syncSplitUi() {
+    const isSplit = state.renderMode === 'split';
+    splitLine.classList.toggle('active', isSplit);
+    splitTagL.classList.toggle('active', isSplit);
+    splitTagR.classList.toggle('active', isSplit);
+    splitLine.style.left = `${state.splitFrac * 100}%`;
+    updateFocusMeta();
+  }
+
+  function setView(v) {
+    state.view = v;
+    document.querySelectorAll('#viewSeg button').forEach((b) => b.classList.toggle('active', b.dataset.view === v));
+    gridOverlay.classList.toggle('hidden', v !== 'grid');
+    focusOverlay.classList.toggle('active', v === 'focus');
+    updateFocusMeta();
+  }
+
+  document.getElementById('renderModeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-mode]');
+    if (!b) return;
+    state.renderMode = b.dataset.mode;
+    document.querySelectorAll('#renderModeSeg button').forEach((x) => x.classList.toggle('active', x === b));
+    syncSplitUi();
+  });
+
+  document.getElementById('viewSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-view]');
+    if (b) setView(b.dataset.view);
+  });
+
+  document.getElementById('facSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-fac]');
+    if (!b) return;
+    state.faction = b.dataset.fac;
+    state.selectedIdx = 0;
+    document.querySelectorAll('#facSeg button').forEach((x) => x.classList.toggle('active', x === b));
+    rebuildGridOverlay();
+  });
+
+  document.getElementById('resSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-res]');
+    if (!b) return;
+    state.res = b.dataset.res;
+    document.querySelectorAll('#resSeg button').forEach((x) => x.classList.toggle('active', x === b));
+    if (state.renderMode === '3d') {
+      state.renderMode = 'pixel';
+      document.querySelectorAll('#renderModeSeg button').forEach((x) => x.classList.toggle('active', x.dataset.mode === 'pixel'));
+      syncSplitUi();
+    } else {
+      updateFocusMeta();
+    }
+  });
+
+  document.getElementById('spinBtn').addEventListener('click', (e) => {
+    state.autoSpin = !state.autoSpin;
+    e.currentTarget.classList.toggle('active', state.autoSpin);
+  });
+
+  const cycleBtn = document.getElementById('cycleBtn');
+  document.getElementById('assembleBtn').addEventListener('click', () => {
+    state.cycleMode = false; cycleBtn.classList.remove('active');
+    if (state.buildProg > 0.96) state.buildProg = 0;
+    state.buildTarget = 1;
+  });
+
+  document.getElementById('disassembleBtn').addEventListener('click', () => {
+    state.cycleMode = false; cycleBtn.classList.remove('active');
+    if (state.buildProg < 0.04) state.buildProg = 1;
+    state.buildTarget = 0;
+  });
+
+  cycleBtn.addEventListener('click', () => {
+    state.cycleMode = !state.cycleMode;
+    cycleBtn.classList.toggle('active', state.cycleMode);
+    if (state.cycleMode) state.cycleTimer = 0;
+  });
+
+  document.getElementById('steppedBtn').addEventListener('click', (e) => {
+    state.stepped = !state.stepped;
+    e.currentTarget.classList.toggle('active', state.stepped);
+    e.currentTarget.textContent = state.stepped ? '20fps·32' : '60fps';
+    updateFocusMeta();
+  });
+
+  document.getElementById('bgBtn').addEventListener('click', (e) => {
+    state.desertBg = !state.desertBg;
+    document.body.classList.toggle('studio-bg', !state.desertBg);
+    e.currentTarget.classList.toggle('active', state.desertBg);
+    e.currentTarget.textContent = state.desertBg ? 'Песок' : 'Студия';
+  });
+
+  buildSlider.addEventListener('input', () => {
+    state.cycleMode = false; cycleBtn.classList.remove('active');
+    state.buildProg = state.buildTarget = Number(buildSlider.value) / 100;
+    buildVal.textContent = `${buildSlider.value}%`;
+  });
+
+  document.getElementById('prevBtn').addEventListener('click', () => {
+    const len = getActiveCatalog().length;
+    state.selectedIdx = (state.selectedIdx + len - 1) % len;
+    updateFocusMeta();
+  });
+  document.getElementById('nextBtn').addEventListener('click', () => {
+    const len = getActiveCatalog().length;
+    state.selectedIdx = (state.selectedIdx + 1) % len;
+    updateFocusMeta();
+  });
+
+  const stageEl = document.getElementById('stage');
+  splitHandle.addEventListener('pointerdown', (e) => { e.stopPropagation(); state.draggingSplit = true; });
+  stageEl.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('button') || state.draggingSplit) return;
+    state.draggingStage = true; state.lastX = e.clientX; state.lastY = e.clientY;
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (state.draggingSplit) {
+      const rect = stageEl.getBoundingClientRect();
+      state.splitFrac = Math.max(0.08, Math.min(0.92, (e.clientX - rect.left) / rect.width));
+      splitLine.style.left = `${state.splitFrac * 100}%`;
+      return;
+    }
+    if (!state.draggingStage) return;
+    const dx = e.clientX - state.lastX, dy = e.clientY - state.lastY;
+    state.lastX = e.clientX; state.lastY = e.clientY;
+    state.yaw += dx * 0.012;
+    if (state.view === 'focus') state.pitch = Math.max(0.28, Math.min(1.25, state.pitch + dy * 0.008));
+  });
+  window.addEventListener('pointerup', () => { state.draggingStage = false; state.draggingSplit = false; });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.key === ' ') {
+      e.preventDefault();
+      state.renderMode = state.renderMode === 'pixel' ? '3d' : (state.renderMode === '3d' ? 'split' : 'pixel');
+      document.querySelectorAll('#renderModeSeg button').forEach((x) => x.classList.toggle('active', x.dataset.mode === state.renderMode));
+      syncSplitUi();
+    } else if (e.key === 'ArrowLeft' && state.view === 'focus') document.getElementById('prevBtn').click();
+    else if (e.key === 'ArrowRight' && state.view === 'focus') document.getElementById('nextBtn').click();
+  });
+
+  rebuildGridOverlay();
+  syncSplitUi();
+
+  function renderPassToTarget(targetFbo, targetW, targetH, raw3D, bands, grainAmp, simT) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, targetFbo);
+    gl.disable(gl.SCISSOR_TEST);
+    gl.viewport(0, 0, targetW, targetH);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.depthMask(true);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clearDepth(1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    gl.useProgram(prog);
+    gl.enableVertexAttribArray(L.aPos);
+    gl.enableVertexAttribArray(L.aNorm);
+    gl.enableVertexAttribArray(L.aCol);
+    gl.enableVertexAttribArray(L.aEm);
+    gl.enableVertexAttribArray(L.aMat);
+    gl.enableVertexAttribArray(L.aAo);
+    gl.enable(gl.SCISSOR_TEST);
+
+    const cat = getActiveCatalog();
+    if (state.view === 'grid') {
+      const { cols, rows } = getGridDims(targetW, targetH, cat.length);
+      const cell = Math.floor(Math.min(targetW / cols, targetH / rows));
+      const ox = Math.floor((targetW - cols * cell) * 0.5);
+      const oy = Math.floor((targetH - rows * cell) * 0.5);
+      for (let i = 0; i < cat.length; i++) {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const vpX = ox + col * cell;
+        const vpY = oy + (rows - 1 - row) * cell;
+        drawItemInViewport(
+          cat[i], vpX, vpY, cell, cell,
+          state.yaw + (i % cols) * 0.14, simT + i * 0.35,
+          raw3D, bands, grainAmp, state.buildProg, 0.68
+        );
+      }
+    } else {
+      drawItemInViewport(
+        cat[state.selectedIdx], 0, 0, targetW, targetH,
+        state.yaw, simT,
+        raw3D, bands, grainAmp, state.buildProg, state.pitch
+      );
+    }
+
+    gl.disable(gl.SCISSOR_TEST);
+    gl.disableVertexAttribArray(L.aPos);
+    gl.disableVertexAttribArray(L.aNorm);
+    gl.disableVertexAttribArray(L.aCol);
+    gl.disableVertexAttribArray(L.aEm);
+    gl.disableVertexAttribArray(L.aMat);
+    gl.disableVertexAttribArray(L.aAo);
+  }
+
+  let lastNow = performance.now(), simTime = 0;
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - lastNow) / 1000);
+    lastNow = now;
+    simTime += dt;
+
+    if (state.autoSpin && !state.draggingStage) state.yaw += dt * 0.55;
+
+    if (state.cycleMode) {
+      state.cycleTimer = (state.cycleTimer + dt) % 6.2;
+      const ct = state.cycleTimer;
+      if (ct < 1.5) state.buildProg = ct / 1.5;
+      else if (ct < 4.3) state.buildProg = 1;
+      else if (ct < 5.7) state.buildProg = 1 - (ct - 4.3) / 1.4;
+      else state.buildProg = 0;
+    } else {
+      if (state.buildProg < state.buildTarget) state.buildProg = Math.min(state.buildTarget, state.buildProg + dt * 0.85);
+      else if (state.buildProg > state.buildTarget) state.buildProg = Math.max(state.buildTarget, state.buildProg - dt * 0.85);
+    }
+
+    const bp = Math.round(state.buildProg * 100);
+    if (Number(buildSlider.value) !== bp) { buildSlider.value = bp; buildVal.textContent = `${bp}%`; }
+
+    const rect = stageEl.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const fullW = Math.max(2, Math.round(rect.width * dpr));
+    const fullH = Math.max(2, Math.round(rect.height * dpr));
+    if (canvas.width !== fullW || canvas.height !== fullH) { canvas.width = fullW; canvas.height = fullH; }
+
+    const cat = getActiveCatalog();
+    const { cols, rows } = getGridDims(fullW, fullH, cat.length);
+    const cellFull = Math.floor(Math.min(fullW / cols, fullH / rows));
+    const cssGridW = (cols * cellFull) / dpr;
+    const cssGridH = (rows * cellFull) / dpr;
+    gridOverlay.style.width = `${cssGridW}px`;
+    gridOverlay.style.height = `${cssGridH}px`;
+    gridOverlay.style.left = `${(rect.width - cssGridW) * 0.5}px`;
+    gridOverlay.style.top = `${(rect.height - cssGridH) * 0.5}px`;
+    gridOverlay.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    gridOverlay.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+
+    const resCfg = RES_CFG[state.res];
+    const refSpan = state.view === 'grid'
+      ? Math.max(cols, rows) * 84
+      : cat[state.selectedIdx].span;
+    const maxDim = state.view === 'grid' ? Math.max(cols * cellFull, rows * cellFull) : Math.min(fullW, fullH);
+    const desiredMinFbo = Math.round(refSpan * resCfg.texelsPerWorld);
+    const fboScale = Math.min(1, desiredMinFbo / Math.max(1, maxDim));
+    const pxW = Math.max(64, Math.round(fullW * fboScale));
+    const pxH = Math.max(64, Math.round(fullH * fboScale));
+
+    if (state.renderMode === '3d') {
+      renderPassToTarget(null, fullW, fullH, true, 0, resCfg.grain, simTime);
+    } else if (state.renderMode === 'pixel') {
+      ensureFbo(pxW, pxH);
+      renderPassToTarget(fbo, pxW, pxH, false, resCfg.bands, resCfg.grain, simTime);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, fullW, fullH);
+      gl.disable(gl.DEPTH_TEST);
+      gl.disable(gl.SCISSOR_TEST);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.useProgram(postProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, fboTex);
+      gl.uniform1i(P.uTex, 0);
+      gl.uniform2f(P.uTexel, 1 / pxW, 1 / pxH);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadVbo);
+      gl.enableVertexAttribArray(P.aQuad);
+      gl.vertexAttribPointer(P.aQuad, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disableVertexAttribArray(P.aQuad);
+    } else {
+      ensureFbo(pxW, pxH);
+      renderPassToTarget(fbo, pxW, pxH, false, resCfg.bands, resCfg.grain, simTime);
+      renderPassToTarget(null, fullW, fullH, true, 0, resCfg.grain, simTime);
+
+      const splitPx = Math.round(fullW * state.splitFrac);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, fullW, fullH);
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(splitPx, 0, fullW - splitPx, fullH);
+      gl.disable(gl.DEPTH_TEST);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.useProgram(postProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, fboTex);
+      gl.uniform1i(P.uTex, 0);
+      gl.uniform2f(P.uTexel, 1 / pxW, 1 / pxH);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadVbo);
+      gl.enableVertexAttribArray(P.aQuad);
+      gl.vertexAttribPointer(P.aQuad, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disableVertexAttribArray(P.aQuad);
+      gl.disable(gl.SCISSOR_TEST);
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

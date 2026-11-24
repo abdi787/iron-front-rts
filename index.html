@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>IRON FRONT // Red Dominion vs Olive Vanguard RTS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="fac-red">
+  <div id="app" class="app">
+    <canvas id="gameCanvas" class="game-canvas"></canvas>
+
+    <!-- Title Screen -->
+    <div id="titleScreen" class="title-screen">
+      <div class="title-scrim"></div>
+      <div class="title-top">
+        <a href="showcase.html" class="mech-btn" style="text-decoration:none;">Шоукейс (16)</a>
+        <button id="titleFullscreenBtn" class="mech-btn icon-only" title="На весь экран">⛶</button>
+      </div>
+
+      <div class="title-hero">
+        <div class="title-badge">PIXEL-ART 3D ENGINE · 20FPS · 32 FACINGS</div>
+        <h1 class="title-logo">IRON <span>FRONT</span></h1>
+        <p class="title-sub">RED DOMINION vs OLIVE VANGUARD</p>
+
+        <!-- Faction Choice Dossier Cards -->
+        <div class="fac-grid" id="facSelectGroup">
+          <button type="button" class="fac-card red active" data-fac="red">
+            <div class="fac-card-head">
+              <span class="flag-badge red">
+                <svg width="20" height="12" viewBox="0 0 14 9" fill="none">
+                  <path d="M2 2C2 5 4 7.5 7 8C10 7.5 12 5 12 2" stroke="#fff" stroke-width="1.1"/>
+                  <path d="M4.5 2.5L7 5.5L9.5 2.5L7 3.5Z" fill="#fff"/>
+                </svg>
+              </span>
+              <strong>RED DOMINION</strong>
+            </div>
+            <div class="fac-preview" id="redCardPreview"></div>
+            <small>Багги, Огнемёт, Мортира, Чёрная Сфера</small>
+          </button>
+
+          <button type="button" class="fac-card green" data-fac="green">
+            <div class="fac-card-head">
+              <span class="flag-badge green">
+                <svg width="20" height="12" viewBox="0 0 14 9" fill="none">
+                  <polygon points="7,1 8.1,3.5 10.8,3.6 8.6,5.2 9.4,7.8 7,6.2 4.6,7.8 5.4,5.2 3.2,3.6 5.9,3.5" fill="#fff"/>
+                  <path d="M1 4.5H3.2M10.8 4.5H13" stroke="#fff" stroke-width="1.2"/>
+                </svg>
+              </span>
+              <strong>OLIVE VANGUARD</strong>
+            </div>
+            <div class="fac-preview" id="greenCardPreview"></div>
+            <small>Хамви, БТР 8×8, Ракета, Циклоп, Ион</small>
+          </button>
+        </div>
+
+        <div class="diff-block">
+          <div class="diff-label">УРОВЕНЬ ПРОТИВНИКА</div>
+          <div class="seg-group" id="diffGroup">
+            <button type="button" data-diff="easy">Рекрут</button>
+            <button type="button" data-diff="normal" class="active">Командир</button>
+            <button type="button" data-diff="hard">Генерал</button>
+          </div>
+        </div>
+
+        <div class="title-cta-row">
+          <button id="startGameBtn" class="cta-btn">В БОЙ</button>
+          <span class="title-hint-desktop">или Enter · Скевоморфный командный пульт</span>
+        </div>
+      </div>
+
+      <div class="title-bottom-hint" id="titleHint">
+        ЛКМ рамка · ПКМ приказ · WASD/Стрелки камера · 1–3 отряды · Q..M техника · 4..0 стройка · F штурм · H стоп · T/G поддержка
+      </div>
+    </div>
+
+    <!-- Structured Non-Overlapping Skeuomorphic Command HUD -->
+    <div id="hudRoot" class="hud-root hidden">
+      <!-- 1. Top Riveted Steel Telemetry Bar -->
+      <header class="cmd-topbar">
+        <div class="hud-left-meta">
+          <div class="faction-plate" id="hudFactionBadge">
+            <span class="flag-badge" id="hudFactionSvg"></span>
+            <span id="hudFactionName">ДОМИНИОН</span>
+          </div>
+
+          <div class="lcd-bay">
+            <div class="lcd-gauge" title="Припасы">
+              <span class="lcd-k">ПРИП.</span>
+              <span class="lcd-v brass" id="hudSupply">520</span>
+            </div>
+
+            <div class="lcd-gauge power" id="hudPowerPill" title="Энергосеть (Выработка / Расход)">
+              <span class="lcd-k">СЕТЬ</span>
+              <div class="pwr-stack">
+                <span class="lcd-v" id="hudPower">30/0</span>
+                <div class="pwr-track"><div class="pwr-fill" id="pwrFillBar"></div></div>
+              </div>
+            </div>
+
+            <div class="lcd-gauge" title="Нефтевышки">
+              <span class="lcd-k">ВЫШКИ</span>
+              <span class="lcd-v" id="hudOutposts">0/3</span>
+            </div>
+
+            <div class="lcd-gauge time-g">
+              <span class="lcd-v" id="hudUnits">0</span>
+              <span class="lcd-sep">/</span>
+              <span class="lcd-v dim" id="hudTime">00:00</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="hud-top-actions">
+          <button id="baseJumpBtn" class="mech-btn small" title="К штабу (Home)">Штаб</button>
+          <button id="radarToggleBtn" class="mech-btn small mobile-only" title="Радар">Радар</button>
+          <button id="muteBtn" class="mech-btn small" title="Звук">🔊</button>
+          <button id="fullscreenBtn" class="mech-btn small" title="Полный экран">⛶</button>
+          <button id="pauseBtn" class="mech-btn small" title="Пауза (P)">❚❚</button>
+        </div>
+      </header>
+
+      <!-- 2. Middle Open Battlefield Layer (Guaranteed Below Topbar!) -->
+      <div class="hud-middle">
+        <div class="alert-banner hidden" id="alertBanner"></div>
+
+        <div class="mode-banner hidden" id="modeBanner">
+          <span id="modeBannerText">Укажите позицию</span>
+          <div class="mode-banner-btns">
+            <button id="confirmModeBtn" class="mech-btn brass small">Принять</button>
+            <button id="cancelModeBtn" class="mech-btn small">Отмена</button>
+          </div>
+        </div>
+
+        <!-- Unified Riveted Tactical Switchboard -->
+        <aside class="tac-rack" id="tacRack">
+          <div class="rack-head">
+            <span>ПУЛЬТ ПРИКАЗОВ</span>
+            <button type="button" id="tacCollapseBtn" class="rack-fold mobile-only" title="Свернуть/Развернуть">▾</button>
+          </div>
+          <div class="rack-body" id="tacBody">
+            <div class="cg-row">
+              <button class="cg-btn" data-cg="1" title="Отряд 1"><span>1</span><small id="cgCount1">0</small></button>
+              <button class="cg-btn" data-cg="2" title="Отряд 2"><span>2</span><small id="cgCount2">0</small></button>
+              <button class="cg-btn" data-cg="3" title="Отряд 3"><span>3</span><small id="cgCount3">0</small></button>
+            </div>
+            <div class="tac-grid">
+              <button id="boxModeBtn" class="mech-btn small mobile-only">Рамка</button>
+              <button id="allArmyBtn" class="mech-btn small">Армия</button>
+              <button id="attackMoveBtn" class="mech-btn small">Штурм</button>
+              <button id="holdBtn" class="mech-btn small">Стоп</button>
+            </div>
+            <div class="power-grid">
+              <button id="pwrRadarBtn" class="mech-btn small radio-btn" title="Авиа-разведка (T)">
+                <span>Разведка</span><small id="pwrRadarCd">Готов</small>
+              </button>
+              <button id="pwrStrikeBtn" class="mech-btn small radio-btn" title="Артудар (G)">
+                <span>Артудар</span><small id="pwrStrikeCd">Связь</small>
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- CRT Tactical Radar Housing -->
+        <aside id="minimapWrap" class="minimap-wrap">
+          <div class="minimap-header">
+            <span id="minimapSector">РАДАР · СЕК-04</span>
+            <span class="radar-led">●</span>
+          </div>
+          <div class="minimap-screen">
+            <canvas id="minimapCanvas" width="178" height="118"></canvas>
+          </div>
+          <div class="minimap-footer">
+            <span>СКАН</span>
+            <span id="minimapEnemyCount">Враг: 0</span>
+          </div>
+        </aside>
+      </div>
+
+      <!-- 3. Bottom Cameo Production Console -->
+      <footer class="cmd-dock">
+        <div class="dock-top-strip">
+          <div class="dock-tabs" id="dockTabs">
+            <button id="tabUnitsBtn" class="dock-tab active">
+              <span class="tab-led" id="tabUnitsDot"></span>
+              <span>ТЕХНИКА</span>
+            </button>
+            <button id="tabBuildBtn" class="dock-tab">
+              <span class="tab-led" id="tabBuildDot"></span>
+              <span>ПОСТРОЙКИ</span>
+            </button>
+          </div>
+
+          <div id="selectionBar" class="selection-bar hidden"></div>
+        </div>
+
+        <div class="dock-panels">
+          <div class="dock-section units-sec">
+            <div class="sec-plate wide-only">ТЕХНИКА ФРАКЦИИ</div>
+            <div id="unitDock" class="cameo-rail"></div>
+          </div>
+
+          <div class="dock-divider wide-only"></div>
+
+          <div class="dock-section builds-sec mobile-hidden" id="buildSectionWrap">
+            <div class="sec-plate wide-only">СООРУЖЕНИЯ</div>
+            <div id="buildDock" class="cameo-rail"></div>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <!-- Field Debriefing Modal -->
+    <div id="statusModal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-emblem" id="modalEmblem"></div>
+        <div class="modal-badge" id="modalBadge">ПАУЗА</div>
+        <h2 id="modalTitle">СВОДКА ШТАБА</h2>
+        <p id="modalSubtitle">Операция приостановлена.</p>
+        <div class="modal-stats" id="modalStats"></div>
+        <div class="modal-actions">
+          <button id="modalResumeBtn" class="cta-btn small">Продолжить</button>
+          <button id="modalRestartBtn" class="mech-btn">Реванш</button>
+          <button id="modalMenuBtn" class="mech-btn">Сменить фракцию</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/mesh_core.js"></script>
+  <script src="js/units_meshes.js"></script>
+  <script src="js/buildings_meshes.js"></script>
+  <script src="js/sim.js"></script>
+  <script src="js/renderer3d.js"></script>
+  <script src="js/fog.js"></script>
+  <script src="js/particles.js"></script>
+  <script src="js/sound.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
