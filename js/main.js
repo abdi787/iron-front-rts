@@ -55,7 +55,6 @@
     const statusModal = document.getElementById('statusModal');
     const unitDock = document.getElementById('unitDock');
     const buildDock = document.getElementById('buildDock');
-    const opBarsEl = document.getElementById('opBars');
     const unitSectionWrap = unitDock.closest('.dock-section');
     const buildSectionWrap = document.getElementById('buildSectionWrap');
     const selectionBar = document.getElementById('selectionBar');
@@ -209,7 +208,6 @@
       applyFactionTheme(sim.playerFaction);
       rebuildUnitDock(sim.playerFaction);
       rebuildBuildDock(sim.playerFaction);
-      lastOpSig = '';
       lastSelSig = '';
       cam.x = 460; cam.y = 1140;
       cam.zoom = window.innerWidth < 760 ? 0.85 : 1.0;
@@ -581,52 +579,7 @@
 
     const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     let hudTick = 0;
-    let lastOpSig = '';
     let lastSelSig = '';
-    const opNodes = new Map();
-
-    function syncOpBars(ops) {
-      if (ops.length === 0) {
-        if (lastOpSig !== '') {
-          opBarsEl.classList.add('hidden');
-          opBarsEl.innerHTML = '';
-          opNodes.clear();
-          lastOpSig = '';
-        }
-        return;
-      }
-      opBarsEl.classList.remove('hidden');
-      const sig = ops.map((o) => `${o.key}:${o.kind}:${o.tag}:${o.paused ? 1 : 0}`).join('|');
-      if (sig !== lastOpSig) {
-        opBarsEl.innerHTML = '';
-        opNodes.clear();
-        for (const o of ops) {
-          const pill = document.createElement('div');
-          pill.className = `op-pill ${o.kind}${o.paused ? ' paused' : ''}`;
-          pill.innerHTML = `
-            ${o.repair ? WRENCH_SVG : ''}
-            <span class="op-tag ${o.kind}">${o.tag}</span>
-            <span class="op-name"></span>
-            <div class="op-track"><div class="op-fill"></div></div>
-            <span class="op-pct"></span>
-          `;
-          opBarsEl.appendChild(pill);
-          opNodes.set(o.key, {
-            nameEl: pill.querySelector('.op-name'),
-            fillEl: pill.querySelector('.op-fill'),
-            pctEl: pill.querySelector('.op-pct')
-          });
-        }
-        lastOpSig = sig;
-      }
-      for (const o of ops) {
-        const ref = opNodes.get(o.key);
-        if (!ref) continue;
-        ref.nameEl.textContent = o.name;
-        ref.fillEl.style.width = `${o.pct}%`;
-        ref.pctEl.textContent = o.paused ? 'НЕТ ⚡' : `${o.pct}%`;
-      }
-    }
 
     function syncHud() {
       const pf = sim.playerFaction;
@@ -743,44 +696,6 @@
         hfill.style.width = `${pct}%`;
       }
       document.getElementById('tabBuildDot').classList.toggle('busy', !!sim.placementMode || anyBldBusy);
-
-      // Build bottom horizontal operations bars (buildings, factory training, active repairs)
-      const ops = [];
-      for (const b of sim.buildings) {
-        if (b.faction !== pf || b.koTimer > 0) continue;
-        if (b.buildProgress < 1) {
-          ops.push({
-            key: `b-${b.id}`, kind: 'build', tag: 'СТРОЙКА',
-            name: BUILDING_SPECS[b.kind].name, pct: Math.round(b.buildProgress * 100), paused: false
-          });
-        } else if (b.queue.length > 0) {
-          const q0 = b.queue[0];
-          const pct = Math.max(0, Math.min(100, Math.round((1 - q0.remaining / q0.total) * 100)));
-          const paused = !sim.isBuildingPowered(b);
-          const cntTxt = b.queue.length > 1 ? ` ×${b.queue.length}` : '';
-          ops.push({
-            key: `t-${b.id}`, kind: 'train', tag: paused ? 'НЕТ ⚡' : 'ТЕХНИКА',
-            name: UNIT_SPECS[q0.kind].name + cntTxt, pct, paused
-          });
-        }
-        if (b.isRepairing) {
-          ops.push({
-            key: `rb-${b.id}`, kind: 'repair', tag: 'РЕМОНТ',
-            name: BUILDING_SPECS[b.kind].name, pct: Math.round((b.hp / b.maxHp) * 100), repair: true
-          });
-        }
-      }
-      const repUnits = sim.units.filter((u) => u.faction === pf && u.koTimer <= 0 && u.isRepairing);
-      if (repUnits.length > 0) {
-        const avgPct = Math.round(repUnits.reduce((sum, u) => sum + u.hp / u.maxHp, 0) / repUnits.length * 100);
-        const hasField = repUnits.some((u) => u.repairKind === 'field');
-        const name = repUnits.length === 1 ? UNIT_SPECS[repUnits[0].kind].name : `Отряд ×${repUnits.length}`;
-        ops.push({
-          key: 'ru', kind: 'repair', tag: hasField ? 'РЕМОНТ' : 'АВТОРЕМ.',
-          name, pct: avgPct, repair: true
-        });
-      }
-      syncOpBars(ops);
 
       const selUnits = sim.units.filter((u) => u.faction === pf && u.selected && u.koTimer <= 0);
       const selBld = sim.buildings.find((b) => b.faction === pf && b.selected && b.koTimer <= 0);

@@ -297,12 +297,41 @@
       for (const b of sim.buildings) {
         if (b.koTimer > 0) continue;
         if (b.faction !== pf && fog && !fog.isVisible(b.x, b.y)) continue;
-        const bTop = b.y - BUILDING_SPECS[b.kind].radius - 26;
+        const specB = BUILDING_SPECS[b.kind];
+        const bTop = b.y - specB.radius - 26;
+        const bBot = b.y + specB.radius * 0.68 + 4;
         this.drawHpBar(ctx, b.x, bTop, 54, b.hp, b.maxHp, b.displayHp, b.faction, pf, b.selected || b.hp < b.maxHp);
         if (b.isRepairing) {
           this.drawRepairBadge(ctx, b.x, bTop - 13, sim.elapsedTime, 'building');
         } else if (b.buildProgress >= 1 && !sim.isBuildingPowered(b)) {
           this.drawLowPowerBadge(ctx, b.x, bTop - 13, sim.elapsedTime);
+        }
+
+        // Bottom horizontal status bars directly beneath buildings (build / train / repair)
+        let rowY = bBot;
+        if (b.buildProgress < 1) {
+          const pctTxt = `${Math.round(b.buildProgress * 100)}%`;
+          this.drawWorldBar(ctx, b.x, rowY, 54, b.buildProgress, '#FACC15', {
+            animateTime: sim.elapsedTime, badgeText: pctTxt, badgeColor: '#FDE68A'
+          });
+          rowY += 8;
+        } else if (b.faction === pf && b.queue.length > 0) {
+          const q0 = b.queue[0];
+          const prog = 1 - q0.remaining / Math.max(0.01, q0.total);
+          const powered = sim.isBuildingPowered(b);
+          const qTxt = b.queue.length > 1 ? `×${b.queue.length}` : `${Math.round(prog * 100)}%`;
+          this.drawWorldBar(ctx, b.x, rowY, 54, prog, '#38BDF8', {
+            paused: !powered,
+            animateTime: powered ? sim.elapsedTime : undefined,
+            badgeText: !powered ? '⚡' : qTxt,
+            badgeColor: !powered ? '#FCA5A5' : '#BAE6FD'
+          });
+          rowY += 8;
+        }
+        if (b.isRepairing) {
+          this.drawWorldBar(ctx, b.x, rowY, 54, b.hp / b.maxHp, '#34D399', {
+            animateTime: sim.elapsedTime, wrenchTime: sim.elapsedTime, wrenchMode: 'building'
+          });
         }
       }
       for (const u of sim.units) {
@@ -310,6 +339,7 @@
         if (u.faction !== pf && fog && !fog.isVisible(u.x, u.y)) continue;
         const spec = UNIT_SPECS[u.kind];
         const uTop = u.y - spec.radius - 20;
+        const uBot = u.y + spec.radius * 0.72 + 4;
         this.drawHpBar(ctx, u.x, uTop, 32, u.hp, u.maxHp, u.displayHp, u.faction, pf, u.selected || u.hp < u.maxHp, u.rank, u.controlGroup);
         if (u.isRepairing) {
           this.drawRepairBadge(ctx, u.x, uTop - (u.rank > 0 ? 15 : 11), sim.elapsedTime, u.repairKind || 'auto');
@@ -317,6 +347,15 @@
         if (spec.isHarvester && u.supplyCarried > 0) {
           ctx.fillStyle = '#141118'; ctx.fillRect(u.x - 14, u.y - spec.radius - 14, 28, 3);
           ctx.fillStyle = '#FACC15'; ctx.fillRect(u.x - 14, u.y - spec.radius - 14, 28 * (u.supplyCarried / spec.supplyCapacity), 3);
+        }
+
+        // Bottom horizontal status bar beneath units (materializing / repairing / auto-repairing)
+        if (u.spawnProg < 1) {
+          this.drawWorldBar(ctx, u.x, uBot, 34, u.spawnProg, '#38BDF8', { animateTime: sim.elapsedTime });
+        } else if (u.isRepairing) {
+          this.drawWorldBar(ctx, u.x, uBot, 34, u.hp / u.maxHp, '#34D399', {
+            animateTime: sim.elapsedTime, wrenchTime: sim.elapsedTime, wrenchMode: u.repairKind || 'auto'
+          });
         }
       }
 
@@ -383,6 +422,67 @@
       }
     }
 
+    drawWorldBar(ctx, x, y, w, ratio, color, opts = {}) {
+      const r = clamp(ratio, 0, 1);
+      const x0 = Math.round(x - w * 0.5);
+      const y0 = Math.round(y);
+      ctx.save();
+      ctx.fillStyle = '#141118';
+      ctx.fillRect(x0 - 1, y0 - 1, w + 2, 6);
+      ctx.fillStyle = '#262019';
+      ctx.fillRect(x0, y0, w, 4);
+
+      if (opts.paused) {
+        ctx.fillStyle = '#991B1B';
+        ctx.fillRect(x0, y0, Math.round(w * r), 4);
+        ctx.fillStyle = '#EF4444';
+        for (let sx = 0; sx < w; sx += 6) ctx.fillRect(x0 + sx, y0, 3, 4);
+      } else {
+        const fw = Math.round(w * r);
+        if (fw > 0) {
+          ctx.fillStyle = color;
+          ctx.fillRect(x0, y0, fw, 4);
+          if (opts.animateTime !== undefined && fw >= 6) {
+            const gx = Math.floor(((opts.animateTime * 36) % Math.max(8, fw))) - 2;
+            const sx = Math.max(x0, x0 + gx);
+            const sw = Math.min(4, x0 + fw - sx);
+            if (sw > 0) {
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.52)';
+              ctx.fillRect(sx, y0, sw, 4);
+            }
+          }
+        }
+      }
+
+      if (opts.wrenchTime !== undefined) {
+        this.drawMiniWrench(ctx, x0 - 6, y0 + 2, opts.wrenchTime, opts.wrenchMode || 'auto');
+      }
+      if (opts.badgeText) {
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#141118';
+        ctx.fillText(opts.badgeText, x0 + w + 4, y0 + 5);
+        ctx.fillStyle = opts.badgeColor || '#EFE6D2';
+        ctx.fillText(opts.badgeText, x0 + w + 3, y0 + 4);
+      }
+      ctx.restore();
+    }
+
+    drawMiniWrench(ctx, x, y, t, mode = 'auto') {
+      const col = mode === 'auto' ? '#34D399' : '#FACC15';
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(-0.35 + Math.sin(t * 10.5) * 0.42);
+      ctx.fillStyle = col;
+      ctx.fillRect(-1, -3, 2, 6);
+      ctx.beginPath();
+      ctx.arc(0, -3.1, 2.2, 0.45 * Math.PI, 2.55 * Math.PI);
+      ctx.fill();
+      ctx.fillStyle = '#141118';
+      ctx.fillRect(-0.7, -4.8, 1.4, 2.2);
+      ctx.restore();
+    }
+
     drawRepairBadge(ctx, x, y, t, mode = 'auto') {
       const bob = Math.sin(t * 7.5) * 1.6;
       const pulse = 0.65 + 0.35 * Math.sin(t * 9.0);
@@ -400,18 +500,9 @@
       ctx.fill();
       ctx.stroke();
 
-      // Animated rocking mechanical wrench silhouette
       ctx.globalAlpha = 1;
-      ctx.rotate(-0.35 + Math.sin(t * 10.5) * 0.42);
-      ctx.fillStyle = col;
-      ctx.fillRect(-1.2, -3.5, 2.4, 7.2);
-      ctx.beginPath();
-      ctx.arc(0, -3.6, 2.7, 0.45 * Math.PI, 2.55 * Math.PI);
-      ctx.fill();
-      ctx.fillStyle = '#141118';
-      ctx.fillRect(-0.8, -5.6, 1.6, 2.6);
+      this.drawMiniWrench(ctx, 0, 0, t, mode);
 
-      // Rising green/gold plus glint
       const rise = (t * 1.4) % 1;
       ctx.globalAlpha = 1 - rise;
       ctx.fillStyle = '#6EE7B7';
