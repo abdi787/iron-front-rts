@@ -7,6 +7,7 @@
     red: '<svg width="20" height="12" viewBox="0 0 14 9" fill="none"><path d="M2 2C2 5 4 7.5 7 8C10 7.5 12 5 12 2" stroke="#fff" stroke-width="1.1"/><path d="M4.5 2.5L7 5.5L9.5 2.5L7 3.5Z" fill="#fff"/></svg>',
     green: '<svg width="20" height="12" viewBox="0 0 14 9" fill="none"><polygon points="7,1 8.1,3.5 10.8,3.6 8.6,5.2 9.4,7.8 7,6.2 4.6,7.8 5.4,5.2 3.2,3.6 5.9,3.5" fill="#fff"/><path d="M1 4.5H3.2M10.8 4.5H13" stroke="#fff" stroke-width="1.2"/></svg>'
   };
+  const WRENCH_SVG = '<svg class="rep-wrench-svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M13.7 2.3a4 4 0 0 0-5.1 4.9L2.8 13a1.4 1.4 0 1 0 2 2l5.8-5.8a4 4 0 0 0 4.9-5.1l-2.3 2.3-1.8-.4-.4-1.8 2.7-1.9Z"/></svg>';
 
   function boot() {
     const canvas = document.getElementById('gameCanvas');
@@ -54,6 +55,7 @@
     const statusModal = document.getElementById('statusModal');
     const unitDock = document.getElementById('unitDock');
     const buildDock = document.getElementById('buildDock');
+    const opBarsEl = document.getElementById('opBars');
     const unitSectionWrap = unitDock.closest('.dock-section');
     const buildSectionWrap = document.getElementById('buildSectionWrap');
     const selectionBar = document.getElementById('selectionBar');
@@ -95,6 +97,7 @@
             <span class="cameo-queue"></span>
             <div class="cameo-shutter" style="height:0%"></div>
           </div>
+          <div class="cameo-hbar"><div class="cameo-hbar-fill"></div></div>
           <div class="cameo-foot">
             <span class="cameo-name">${s.name}</span>
             <span class="cameo-cost">${s.cost}</span>
@@ -108,6 +111,8 @@
         unitBtns[kind] = {
           btn,
           shutter: btn.querySelector('.cameo-shutter'),
+          hbar: btn.querySelector('.cameo-hbar'),
+          hfill: btn.querySelector('.cameo-hbar-fill'),
           queueEl: btn.querySelector('.cameo-queue')
         };
       }
@@ -130,6 +135,7 @@
             <span class="cameo-tag ${pwrCls}">${pwrLabel}</span>
             <div class="cameo-shutter" style="height:0%"></div>
           </div>
+          <div class="cameo-hbar"><div class="cameo-hbar-fill"></div></div>
           <div class="cameo-foot">
             <span class="cameo-name">${s.name}</span>
             <span class="cameo-cost">${s.cost}</span>
@@ -145,7 +151,9 @@
         buildDock.appendChild(btn);
         buildBtns[kind] = {
           btn,
-          shutter: btn.querySelector('.cameo-shutter')
+          shutter: btn.querySelector('.cameo-shutter'),
+          hbar: btn.querySelector('.cameo-hbar'),
+          hfill: btn.querySelector('.cameo-hbar-fill')
         };
       }
     }
@@ -201,6 +209,8 @@
       applyFactionTheme(sim.playerFaction);
       rebuildUnitDock(sim.playerFaction);
       rebuildBuildDock(sim.playerFaction);
+      lastOpSig = '';
+      lastSelSig = '';
       cam.x = 460; cam.y = 1140;
       cam.zoom = window.innerWidth < 760 ? 0.85 : 1.0;
       cam.vx = 0; cam.vy = 0;
@@ -291,12 +301,15 @@
       sim.activePowerMode = sim.activePowerMode === 'reconSweep' ? null : 'reconSweep';
       lastHoverWorld = { x: cam.x, y: cam.y };
     });
-    document.getElementById('pwrStrikeBtn').addEventListener('click', () => {
-      if (!sim.supportPowers.artilleryBarrage.unlocked) { sim.showAlert('Требуется Штаб-связь'); return; }
+    const toggleArtilleryStrike = () => {
+      const ab = sim.supportPowers.artilleryBarrage;
+      if (!ab.unlocked) { sim.showAlert('Требуется Штаб-связь'); return; }
+      if (!ab.powered) { sim.showAlert('Штаб-связь обесточен: постройте Дизель-ген.'); return; }
       sim.placementMode = null;
       sim.activePowerMode = sim.activePowerMode === 'artilleryBarrage' ? null : 'artilleryBarrage';
       lastHoverWorld = { x: cam.x, y: cam.y };
-    });
+    };
+    document.getElementById('pwrStrikeBtn').addEventListener('click', toggleArtilleryStrike);
 
     confirmModeBtn.addEventListener('click', () => {
       if (sim.placementMode) sim.placeBuilding(sim.playerFaction, sim.placementMode, lastHoverWorld.x, lastHoverWorld.y);
@@ -544,9 +557,7 @@
       } else if (k === 't') {
         sim.activePowerMode = sim.activePowerMode === 'reconSweep' ? null : 'reconSweep';
       } else if (k === 'g') {
-        if (sim.supportPowers.artilleryBarrage.unlocked) {
-          sim.activePowerMode = sim.activePowerMode === 'artilleryBarrage' ? null : 'artilleryBarrage';
-        }
+        toggleArtilleryStrike();
       } else if (k === 'home') {
         const hq = sim.getPlayerHq();
         if (hq) { cam.x = hq.x; cam.y = hq.y; clampCam(); }
@@ -570,6 +581,52 @@
 
     const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     let hudTick = 0;
+    let lastOpSig = '';
+    let lastSelSig = '';
+    const opNodes = new Map();
+
+    function syncOpBars(ops) {
+      if (ops.length === 0) {
+        if (lastOpSig !== '') {
+          opBarsEl.classList.add('hidden');
+          opBarsEl.innerHTML = '';
+          opNodes.clear();
+          lastOpSig = '';
+        }
+        return;
+      }
+      opBarsEl.classList.remove('hidden');
+      const sig = ops.map((o) => `${o.key}:${o.kind}:${o.tag}:${o.paused ? 1 : 0}`).join('|');
+      if (sig !== lastOpSig) {
+        opBarsEl.innerHTML = '';
+        opNodes.clear();
+        for (const o of ops) {
+          const pill = document.createElement('div');
+          pill.className = `op-pill ${o.kind}${o.paused ? ' paused' : ''}`;
+          pill.innerHTML = `
+            ${o.repair ? WRENCH_SVG : ''}
+            <span class="op-tag ${o.kind}">${o.tag}</span>
+            <span class="op-name"></span>
+            <div class="op-track"><div class="op-fill"></div></div>
+            <span class="op-pct"></span>
+          `;
+          opBarsEl.appendChild(pill);
+          opNodes.set(o.key, {
+            nameEl: pill.querySelector('.op-name'),
+            fillEl: pill.querySelector('.op-fill'),
+            pctEl: pill.querySelector('.op-pct')
+          });
+        }
+        lastOpSig = sig;
+      }
+      for (const o of ops) {
+        const ref = opNodes.get(o.key);
+        if (!ref) continue;
+        ref.nameEl.textContent = o.name;
+        ref.fillEl.style.width = `${o.pct}%`;
+        ref.pctEl.textContent = o.paused ? 'НЕТ ⚡' : `${o.pct}%`;
+      }
+    }
 
     function syncHud() {
       const pf = sim.playerFaction;
@@ -623,19 +680,20 @@
       document.getElementById('pwrRadarBtn').classList.toggle('active', sim.activePowerMode === 'reconSweep');
 
       const as = sim.supportPowers.artilleryBarrage;
-      document.getElementById('pwrStrikeCd').textContent = !as.unlocked ? 'Связь' : as.ready ? 'Готов' : `${Math.ceil(as.cooldown)}с`;
+      document.getElementById('pwrStrikeCd').textContent = !as.unlocked ? 'Связь' : !as.powered ? 'Нет ⚡' : as.ready ? 'Готов' : `${Math.ceil(as.cooldown)}с`;
       document.getElementById('pwrStrikeBtn').classList.toggle('active', sim.activePowerMode === 'artilleryBarrage');
 
       const hasHq = sim.buildings.some((b) => b.faction === pf && b.kind === 'hq' && b.koTimer <= 0);
       const hasFac = sim.buildings.some((b) => b.faction === pf && b.kind === 'motorpool' && b.koTimer <= 0 && b.buildProgress >= 1);
       const hasTech = sim.hasTech(pf, 'command');
+      const lowPwr = sim.isLowPower(pf);
 
       let anyUnitBusy = false;
       for (const kind of activeUnitOrder) {
         const s = UNIT_SPECS[kind];
         const entry = unitBtns[kind];
         if (!entry) continue;
-        const { btn, shutter, queueEl } = entry;
+        const { btn, shutter, hbar, hfill, queueEl } = entry;
         const prodOk = s.requiresBuilding === 'hq' ? hasHq : hasFac;
         const techOk = !s.requiresTech || hasTech;
         btn.disabled = !prodOk || !techOk || pe.supplies < s.cost;
@@ -643,17 +701,26 @@
 
         let qCount = 0;
         let firstItem = null;
+        let firstBld = null;
         for (const b of sim.buildings) {
           if (b.faction !== pf || b.kind !== s.requiresBuilding) continue;
           for (const qi of b.queue) {
-            if (qi.kind === kind) { qCount++; if (!firstItem && b.queue[0] === qi) firstItem = qi; }
+            if (qi.kind === kind) {
+              qCount++;
+              if (!firstItem && b.queue[0] === qi) { firstItem = qi; firstBld = b; }
+            }
           }
         }
         if (qCount > 0) anyUnitBusy = true;
+        const pct = firstItem ? Math.max(0, Math.min(100, Math.round((1 - firstItem.remaining / firstItem.total) * 100))) : 0;
+        const paused = !!(firstBld && !sim.isBuildingPowered(firstBld));
         queueEl.textContent = qCount > 1 ? `×${qCount}` : qCount === 1 ? '1' : '';
         queueEl.classList.toggle('on', qCount > 0);
         btn.classList.toggle('active', !!firstItem);
-        shutter.style.height = firstItem ? `${Math.round((1 - firstItem.remaining / firstItem.total) * 100)}%` : '0%';
+        shutter.style.height = `${pct}%`;
+        hbar.classList.toggle('on', !!firstItem);
+        hbar.classList.toggle('paused', paused);
+        hfill.style.width = `${pct}%`;
       }
       document.getElementById('tabUnitsDot').classList.toggle('busy', anyUnitBusy);
 
@@ -662,16 +729,58 @@
         const s = BUILDING_SPECS[kind];
         const entry = buildBtns[kind];
         if (!entry) continue;
-        const { btn, shutter } = entry;
+        const { btn, shutter, hbar, hfill } = entry;
         const techOk = !s.requiresTech || hasTech;
         btn.disabled = !hasHq || !techOk || pe.supplies < s.cost;
         btn.classList.toggle('locked', !techOk);
         const constructing = sim.buildings.find((b) => b.faction === pf && b.kind === kind && b.buildProgress < 1 && b.koTimer <= 0);
         if (constructing) anyBldBusy = true;
+        const pct = constructing ? Math.round(constructing.buildProgress * 100) : 0;
         btn.classList.toggle('active', sim.placementMode === kind || !!constructing);
-        shutter.style.height = constructing ? `${Math.round(constructing.buildProgress * 100)}%` : '0%';
+        btn.classList.toggle('need-power', kind === 'generator' && lowPwr && !constructing);
+        shutter.style.height = `${pct}%`;
+        hbar.classList.toggle('on', !!constructing);
+        hfill.style.width = `${pct}%`;
       }
       document.getElementById('tabBuildDot').classList.toggle('busy', !!sim.placementMode || anyBldBusy);
+
+      // Build bottom horizontal operations bars (buildings, factory training, active repairs)
+      const ops = [];
+      for (const b of sim.buildings) {
+        if (b.faction !== pf || b.koTimer > 0) continue;
+        if (b.buildProgress < 1) {
+          ops.push({
+            key: `b-${b.id}`, kind: 'build', tag: 'СТРОЙКА',
+            name: BUILDING_SPECS[b.kind].name, pct: Math.round(b.buildProgress * 100), paused: false
+          });
+        } else if (b.queue.length > 0) {
+          const q0 = b.queue[0];
+          const pct = Math.max(0, Math.min(100, Math.round((1 - q0.remaining / q0.total) * 100)));
+          const paused = !sim.isBuildingPowered(b);
+          const cntTxt = b.queue.length > 1 ? ` ×${b.queue.length}` : '';
+          ops.push({
+            key: `t-${b.id}`, kind: 'train', tag: paused ? 'НЕТ ⚡' : 'ТЕХНИКА',
+            name: UNIT_SPECS[q0.kind].name + cntTxt, pct, paused
+          });
+        }
+        if (b.isRepairing) {
+          ops.push({
+            key: `rb-${b.id}`, kind: 'repair', tag: 'РЕМОНТ',
+            name: BUILDING_SPECS[b.kind].name, pct: Math.round((b.hp / b.maxHp) * 100), repair: true
+          });
+        }
+      }
+      const repUnits = sim.units.filter((u) => u.faction === pf && u.koTimer <= 0 && u.isRepairing);
+      if (repUnits.length > 0) {
+        const avgPct = Math.round(repUnits.reduce((sum, u) => sum + u.hp / u.maxHp, 0) / repUnits.length * 100);
+        const hasField = repUnits.some((u) => u.repairKind === 'field');
+        const name = repUnits.length === 1 ? UNIT_SPECS[repUnits[0].kind].name : `Отряд ×${repUnits.length}`;
+        ops.push({
+          key: 'ru', kind: 'repair', tag: hasField ? 'РЕМОНТ' : 'АВТОРЕМ.',
+          name, pct: avgPct, repair: true
+        });
+      }
+      syncOpBars(ops);
 
       const selUnits = sim.units.filter((u) => u.faction === pf && u.selected && u.koTimer <= 0);
       const selBld = sim.buildings.find((b) => b.faction === pf && b.selected && b.koTimer <= 0);
@@ -679,28 +788,49 @@
         const counts = {};
         for (const u of selUnits) counts[u.kind] = (counts[u.kind] || 0) + 1;
         const summary = Object.entries(counts).map(([k, c]) => `${UNIT_SPECS[k].name}:${c}`).join(' · ');
-        selectionBar.innerHTML = `<span>ОТРЯД (${selUnits.length}): ${summary}</span><button class="mech-btn small" id="clearSelBtn">Сброс</button>`;
-        selectionBar.classList.remove('hidden');
-        document.getElementById('clearSelBtn').onclick = () => { for (const u of sim.units) u.selected = false; };
+        const repU = selUnits.filter((u) => u.isRepairing);
+        const repMode = repU.length === 0 ? '' : (repU.some((u) => u.repairKind === 'field') ? 'field' : 'auto');
+        const sig = `u:${selUnits.length}:${summary}:${repMode}`;
+        if (sig !== lastSelSig) {
+          lastSelSig = sig;
+          const repBadge = repMode
+            ? `<span class="rep-badge">${WRENCH_SVG} ${repMode === 'auto' ? 'АВТОРЕМОНТ' : 'РЕМОНТ'}</span>`
+            : '';
+          selectionBar.innerHTML = `<span>ОТРЯД (${selUnits.length}): ${summary}</span>${repBadge}<button class="mech-btn small" id="clearSelBtn">Сброс</button>`;
+          selectionBar.classList.remove('hidden');
+          document.getElementById('clearSelBtn').onclick = () => { for (const u of sim.units) u.selected = false; };
+        }
       } else if (selBld) {
         const bs = BUILDING_SPECS[selBld.kind];
         const hpTxt = `${Math.ceil(selBld.hp)}/${selBld.maxHp}`;
-        let html = `<span>${bs.name} · ${hpTxt} HP</span>`;
-        if (selBld.hp < selBld.maxHp) {
-          html += `<button class="mech-btn small ${selBld.repairing ? 'active' : ''}" id="repBldBtn">Ремонт</button>`;
+        const bldOffline = selBld.buildProgress >= 1 && !sim.isBuildingPowered(selBld);
+        const canRep = selBld.hp < selBld.maxHp;
+        const sig = `b:${selBld.id}:${bldOffline ? 1 : 0}:${selBld.isRepairing ? 1 : 0}:${canRep ? 1 : 0}:${selBld.repairing ? 1 : 0}:${selBld.repeatQueue ? 1 : 0}`;
+        if (sig !== lastSelSig) {
+          lastSelSig = sig;
+          let html = `<span>${bs.name} · <b id="selBldHp">${hpTxt}</b> HP</span>`;
+          if (bldOffline) html += `<span class="pwr-off-badge">⚡ ОБЕСТОЧЕНО</span>`;
+          if (selBld.isRepairing) html += `<span class="rep-badge">${WRENCH_SVG} РЕМОНТ</span>`;
+          if (canRep) {
+            html += `<button class="mech-btn small ${selBld.repairing ? 'active' : ''}" id="repBldBtn">Ремонт</button>`;
+          }
+          if (bs.produces.length > 0) {
+            html += `<button class="mech-btn small ${selBld.repeatQueue ? 'active' : ''}" id="repQBtn">Повтор</button>`;
+          }
+          if (bs.canSell) {
+            html += `<button class="mech-btn small" id="sellBldBtn">Снос (+${Math.round(bs.cost * 0.5)})</button>`;
+          }
+          selectionBar.innerHTML = html;
+          selectionBar.classList.remove('hidden');
+          const rb = document.getElementById('repBldBtn'); if (rb) rb.onclick = () => sim.toggleRepairBuilding();
+          const rq = document.getElementById('repQBtn'); if (rq) rq.onclick = () => sim.toggleRepeatBuilding();
+          const sb = document.getElementById('sellBldBtn'); if (sb) sb.onclick = () => sim.sellSelectedBuilding();
+        } else {
+          const hpEl = document.getElementById('selBldHp');
+          if (hpEl) hpEl.textContent = hpTxt;
         }
-        if (bs.produces.length > 0) {
-          html += `<button class="mech-btn small ${selBld.repeatQueue ? 'active' : ''}" id="repQBtn">Повтор</button>`;
-        }
-        if (bs.canSell) {
-          html += `<button class="mech-btn small" id="sellBldBtn">Снос (+${Math.round(bs.cost * 0.5)})</button>`;
-        }
-        selectionBar.innerHTML = html;
-        selectionBar.classList.remove('hidden');
-        const rb = document.getElementById('repBldBtn'); if (rb) rb.onclick = () => sim.toggleRepairBuilding();
-        const rq = document.getElementById('repQBtn'); if (rq) rq.onclick = () => sim.toggleRepeatBuilding();
-        const sb = document.getElementById('sellBldBtn'); if (sb) sb.onclick = () => sim.sellSelectedBuilding();
-      } else {
+      } else if (lastSelSig !== '') {
+        lastSelSig = '';
         selectionBar.classList.add('hidden');
       }
 

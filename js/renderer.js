@@ -297,13 +297,23 @@
       for (const b of sim.buildings) {
         if (b.koTimer > 0) continue;
         if (b.faction !== pf && fog && !fog.isVisible(b.x, b.y)) continue;
-        this.drawHpBar(ctx, b.x, b.y - BUILDING_SPECS[b.kind].radius - 26, 54, b.hp, b.maxHp, b.displayHp, b.faction, pf, b.selected || b.hp < b.maxHp);
+        const bTop = b.y - BUILDING_SPECS[b.kind].radius - 26;
+        this.drawHpBar(ctx, b.x, bTop, 54, b.hp, b.maxHp, b.displayHp, b.faction, pf, b.selected || b.hp < b.maxHp);
+        if (b.isRepairing) {
+          this.drawRepairBadge(ctx, b.x, bTop - 13, sim.elapsedTime, 'building');
+        } else if (b.buildProgress >= 1 && !sim.isBuildingPowered(b)) {
+          this.drawLowPowerBadge(ctx, b.x, bTop - 13, sim.elapsedTime);
+        }
       }
       for (const u of sim.units) {
         if (u.koTimer > 0) continue;
         if (u.faction !== pf && fog && !fog.isVisible(u.x, u.y)) continue;
         const spec = UNIT_SPECS[u.kind];
-        this.drawHpBar(ctx, u.x, u.y - spec.radius - 20, 32, u.hp, u.maxHp, u.displayHp, u.faction, pf, u.selected || u.hp < u.maxHp, u.rank, u.controlGroup);
+        const uTop = u.y - spec.radius - 20;
+        this.drawHpBar(ctx, u.x, uTop, 32, u.hp, u.maxHp, u.displayHp, u.faction, pf, u.selected || u.hp < u.maxHp, u.rank, u.controlGroup);
+        if (u.isRepairing) {
+          this.drawRepairBadge(ctx, u.x, uTop - (u.rank > 0 ? 15 : 11), sim.elapsedTime, u.repairKind || 'auto');
+        }
         if (spec.isHarvester && u.supplyCarried > 0) {
           ctx.fillStyle = '#141118'; ctx.fillRect(u.x - 14, u.y - spec.radius - 14, 28, 3);
           ctx.fillStyle = '#FACC15'; ctx.fillRect(u.x - 14, u.y - spec.radius - 14, 28 * (u.supplyCarried / spec.supplyCapacity), 3);
@@ -371,6 +381,68 @@
         ctx.textAlign = 'right';
         ctx.fillText(String(cg), x0 - 2, y + 4);
       }
+    }
+
+    drawRepairBadge(ctx, x, y, t, mode = 'auto') {
+      const bob = Math.sin(t * 7.5) * 1.6;
+      const pulse = 0.65 + 0.35 * Math.sin(t * 9.0);
+      const col = mode === 'auto' ? '#34D399' : '#FACC15';
+      const cy = y + bob;
+
+      ctx.save();
+      ctx.translate(x, cy);
+      ctx.fillStyle = 'rgba(18, 15, 12, 0.90)';
+      ctx.strokeStyle = col;
+      ctx.globalAlpha = pulse;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Animated rocking mechanical wrench silhouette
+      ctx.globalAlpha = 1;
+      ctx.rotate(-0.35 + Math.sin(t * 10.5) * 0.42);
+      ctx.fillStyle = col;
+      ctx.fillRect(-1.2, -3.5, 2.4, 7.2);
+      ctx.beginPath();
+      ctx.arc(0, -3.6, 2.7, 0.45 * Math.PI, 2.55 * Math.PI);
+      ctx.fill();
+      ctx.fillStyle = '#141118';
+      ctx.fillRect(-0.8, -5.6, 1.6, 2.6);
+
+      // Rising green/gold plus glint
+      const rise = (t * 1.4) % 1;
+      ctx.globalAlpha = 1 - rise;
+      ctx.fillStyle = '#6EE7B7';
+      ctx.fillRect(6, -3 - rise * 6, 3, 1);
+      ctx.fillRect(7, -4 - rise * 6, 1, 3);
+      ctx.restore();
+    }
+
+    drawLowPowerBadge(ctx, x, y, t) {
+      if (Math.sin(t * 7.5) < -0.25) return;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.fillStyle = 'rgba(28, 10, 10, 0.92)';
+      ctx.strokeStyle = '#EF4444';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = '#FACC15';
+      ctx.beginPath();
+      ctx.moveTo(1.2, -4.8);
+      ctx.lineTo(-3.0, 0.4);
+      ctx.lineTo(-0.2, 0.4);
+      ctx.lineTo(-1.4, 4.8);
+      ctx.lineTo(3.0, -0.5);
+      ctx.lineTo(0.2, -0.5);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
     }
 
     renderMinimap(ctx, w, h, sim, cam, vw, vh) {

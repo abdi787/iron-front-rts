@@ -289,8 +289,8 @@
 
     mkPowers() {
       return {
-        reconSweep: { cooldown: 0, maxCooldown: 35, ready: true, unlocked: true },
-        artilleryBarrage: { cooldown: 0, maxCooldown: 55, ready: false, unlocked: false }
+        reconSweep: { cooldown: 0, maxCooldown: 35, ready: true, unlocked: true, powered: true },
+        artilleryBarrage: { cooldown: 0, maxCooldown: 55, ready: false, unlocked: false, powered: true }
       };
     }
 
@@ -360,11 +360,15 @@
       this.economies = { red: this.mkEcon(800), green: this.mkEcon(800) };
 
       this.spawnBuilding('red', 'hq', 360, 1240);
+      this.spawnBuilding('red', 'generator', 160, 1280);
+      this.spawnBuilding('red', 'generator', 160, 1190);
       this.spawnBuilding('red', 'motorpool', 540, 1220);
       this.spawnBuilding('red', 'command', 240, 1140);
       this.spawnBuilding('red', 'heavyGun', 630, 1090);
 
       this.spawnBuilding('green', 'hq', 2040, 360);
+      this.spawnBuilding('green', 'generator', 2240, 320);
+      this.spawnBuilding('green', 'generator', 2240, 410);
       this.spawnBuilding('green', 'motorpool', 1860, 380);
       this.spawnBuilding('green', 'command', 2160, 460);
       this.spawnBuilding('green', 'heavyGun', 1770, 510);
@@ -455,7 +459,7 @@
         rallyY: isSwBase ? y - 75 : y + 75,
         queue: [], selected: false, koTimer: 0,
         buildProgress: built ? 1 : 0.05,
-        repairing: false, repeatQueue: false, repeatKind: null
+        repairing: false, isRepairing: false, repeatQueue: false, repeatKind: null
       };
       this.buildings.push(b);
       this.recomputePower();
@@ -477,6 +481,7 @@
         supplyCarried: 0, trackTimer: 0, animPhase: 0,
         slowTimer: 0,
         spawnProg: materialize ? 0.05 : 1,
+        isRepairing: false, repairKind: null,
         koTimer: 0, rank: 0, xp: 0, lastCombatTime: -99, controlGroup: null
       };
       this.units.push(u);
@@ -487,31 +492,43 @@
       return this.buildings.some((b) => b.faction === faction && b.kind === kind && b.koTimer <= 0 && b.buildProgress >= 1);
     }
 
+    isLowPower(faction) {
+      const e = this.economies[faction];
+      return !!(e && e.powerConsumed > e.powerProduced);
+    }
+
+    isBuildingPowered(b) {
+      if (!b || b.koTimer > 0 || b.buildProgress < 1) return false;
+      const spec = BUILDING_SPECS[b.kind];
+      if (!spec || spec.powerDelta >= 0 || b.kind === 'depot') return true;
+      return !this.isLowPower(b.faction);
+    }
+
     recomputePower() {
+      const wasLow = !this.demoMode && this.phase === 'playing' && this.isLowPower(this.playerFaction);
       for (const f of ['red', 'green']) {
         let prod = 0, cons = 0;
         for (const b of this.buildings) {
-          if (b.faction !== f || b.koTimer > 0) continue;
+          if (b.faction !== f || b.koTimer > 0 || b.buildProgress < 1) continue;
           const spec = BUILDING_SPECS[b.kind];
-          if (spec.powerDelta >= 0) {
-            if (b.buildProgress >= 1) prod += spec.powerDelta;
-          } else {
-            cons += -spec.powerDelta;
-          }
+          if (spec.powerDelta >= 0) prod += spec.powerDelta;
+          else cons += -spec.powerDelta;
         }
         this.economies[f].powerProduced = prod;
         this.economies[f].powerConsumed = cons;
       }
+      const pPowered = !this.isLowPower(this.playerFaction);
       this.supportPowers.artilleryBarrage.unlocked = this.hasTech(this.playerFaction, 'command');
-      this.supportPowers.artilleryBarrage.ready = this.supportPowers.artilleryBarrage.unlocked && this.supportPowers.artilleryBarrage.cooldown <= 0;
+      this.supportPowers.artilleryBarrage.powered = pPowered;
+      this.supportPowers.artilleryBarrage.ready = this.supportPowers.artilleryBarrage.unlocked && pPowered && this.supportPowers.artilleryBarrage.cooldown <= 0;
       this.supportPowers.reconSweep.ready = this.supportPowers.reconSweep.cooldown <= 0;
+      if (!this.demoMode && this.phase === 'playing' && !wasLow && !pPowered) {
+        this.showAlert('НЕТ ЭНЕРГИИ: заводы и турели отключены!');
+      }
     }
 
     getPowerFactor(faction) {
-      const e = this.economies[faction];
-      if (e.powerConsumed <= e.powerProduced) return 1.0;
-      if (e.powerProduced <= 0) return 0.45;
-      return clamp(e.powerProduced / e.powerConsumed, 0.45, 0.85);
+      return this.isLowPower(faction) ? 0.0 : 1.0;
     }
 
     showAlert(msg) {
@@ -599,7 +616,10 @@
 
       this.economies[faction].supplies -= spec.cost;
       chosen.queue.push({ kind, total: spec.buildTime, remaining: spec.buildTime });
-      if (faction === this.playerFaction) this.sound && this.sound.playClick();
+      if (faction === this.playerFaction) {
+        if (!this.isBuildingPowered(chosen)) this.showAlert('Ангар обесточен: выпуск на паузе — постройте Дизель-ген.');
+        this.sound && this.sound.playClick();
+      }
       return true;
     }
 
@@ -818,7 +838,13 @@
     triggerSupportPower(kind, wx, wy) {
       const st = this.supportPowers[kind];
       const spec = SUPPORT_POWER_SPECS[kind];
-      if (!st || !st.ready) return false;
+      if (!st) return false;
+      if (kind === 'artilleryBarrage' && st.unlocked && !st.powered) {
+        this.showAlert('Штаб-связь обесточен: постройте Дизель-ген.');
+        this.activePowerMode = null;
+        return false;
+      }
+      if (!st.ready) return false;
       const x = clamp(wx, 80, WORLD_WIDTH - 80);
       const y = clamp(wy, 80, WORLD_HEIGHT - 80);
       st.cooldown = st.maxCooldown;
@@ -848,6 +874,8 @@
       }
       this.cameraTrauma = Math.max(0, this.cameraTrauma - dt * 1.4);
       this.repairBeams.length = 0;
+      for (const b of this.buildings) b.isRepairing = false;
+      for (const u of this.units) { u.isRepairing = false; u.repairKind = null; }
 
       this.updateCapturePoints(dt);
       this.updateSupportPowers(dt);
@@ -916,10 +944,14 @@
     }
 
     updateSupportPowers(dt) {
+      const pPowered = !this.isLowPower(this.playerFaction);
       for (const k of ['reconSweep', 'artilleryBarrage']) {
         const st = this.supportPowers[k];
-        if (st.cooldown > 0) st.cooldown = Math.max(0, st.cooldown - dt);
-        st.ready = (st.unlocked !== false) && st.cooldown <= 0;
+        if (k === 'artilleryBarrage') st.powered = pPowered;
+        if (st.cooldown > 0 && (k !== 'artilleryBarrage' || pPowered)) {
+          st.cooldown = Math.max(0, st.cooldown - dt);
+        }
+        st.ready = (st.unlocked !== false) && (st.powered !== false) && st.cooldown <= 0;
       }
       for (let i = this.activeRadarScans.length - 1; i >= 0; i--) {
         this.activeRadarScans[i].remaining -= dt;
@@ -976,7 +1008,13 @@
               2.5, '#FACC15', 0.28, 120
             );
           }
-          if (b.buildProgress >= 1) this.recomputePower();
+          if (b.buildProgress >= 1) {
+            this.recomputePower();
+            if (b.faction === this.playerFaction && !this.demoMode && spec.powerDelta > 0) {
+              this.effects && this.effects.spawnText(b.x, b.y - 28, `+${spec.powerDelta} ⚡`, '#86EFAC');
+              this.sound && this.sound.playSupply();
+            }
+          }
           continue;
         }
 
@@ -986,6 +1024,7 @@
           if (this.economies[b.faction].supplies >= cost) {
             this.economies[b.faction].supplies -= cost;
             b.hp += heal;
+            b.isRepairing = true;
           } else {
             b.repairing = false;
           }
@@ -993,12 +1032,11 @@
           b.repairing = false;
         }
 
-        if (b.kind === 'command') b.angle = normAngle(b.angle + dt * 1.45);
+        const powered = this.isBuildingPowered(b);
+        if (b.kind === 'command' && powered) b.angle = normAngle(b.angle + dt * 1.45);
 
-        const pwrMult = this.getPowerFactor(b.faction);
-
-        if (b.queue.length > 0) {
-          const speedMult = pwrMult * (b.faction === this.enemyFaction && !this.demoMode ? AI_PROFILES[this.difficulty].prodMult : 1);
+        if (b.queue.length > 0 && powered) {
+          const speedMult = b.faction === this.enemyFaction && !this.demoMode ? AI_PROFILES[this.difficulty].prodMult : 1;
           const item = b.queue[0];
           item.remaining -= dt * speedMult;
           if (item.remaining <= 0) {
@@ -1021,19 +1059,21 @@
           }
         }
 
-        if (b.kind === 'workshop') {
+        if (b.kind === 'workshop' && powered) {
           const r2 = spec.repairRadius * spec.repairRadius;
           for (const u of this.units) {
             if (u.faction === b.faction && u.koTimer <= 0 && u.hp < u.maxHp && distSq(u.x, u.y, b.x, b.y) <= r2) {
-              u.hp = Math.min(u.maxHp, u.hp + spec.repairRate * pwrMult * dt);
+              u.hp = Math.min(u.maxHp, u.hp + spec.repairRate * dt);
+              u.isRepairing = true;
+              u.repairKind = 'field';
               this.repairBeams.push({ x1: b.x, y1: b.y - 24, x2: u.x, y2: u.y - 10, color: '#FACC15' });
               break;
             }
           }
         }
 
-        if (spec.damage > 0) {
-          b.fireCooldown = Math.max(0, b.fireCooldown - dt * pwrMult);
+        if (spec.damage > 0 && powered) {
+          b.fireCooldown = Math.max(0, b.fireCooldown - dt);
           const enemy = b.faction === 'red' ? 'green' : 'red';
           const target = this.findNearestEnemy(b.x, b.y, spec.range, enemy);
           if (target) {
@@ -1082,6 +1122,8 @@
 
         if (vet.regen > 0 && this.elapsedTime - u.lastCombatTime >= 5.0 && u.hp < u.maxHp) {
           u.hp = Math.min(u.maxHp, u.hp + vet.regen * dt);
+          u.isRepairing = true;
+          u.repairKind = u.repairKind || 'auto';
         }
 
         if (spec.repairAuraRadius > 0) {
@@ -1089,6 +1131,8 @@
           for (const ally of this.units) {
             if (ally.id !== u.id && ally.faction === u.faction && ally.koTimer <= 0 && ally.hp < ally.maxHp && distSq(u.x, u.y, ally.x, ally.y) <= r2) {
               ally.hp = Math.min(ally.maxHp, ally.hp + spec.repairAuraRate * dt);
+              ally.isRepairing = true;
+              ally.repairKind = 'field';
               this.repairBeams.push({ x1: u.x, y1: u.y - 16, x2: ally.x, y2: ally.y - 10, color: '#34D399' });
               break;
             }
@@ -1495,7 +1539,8 @@
         if (attackerFaction && attackerFaction !== target.faction) {
           this.economies[attackerFaction].kills++;
         }
-        if (!isBuilding) this.economies[target.faction].lost++;
+        if (isBuilding) this.recomputePower();
+        else this.economies[target.faction].lost++;
       }
     }
 
@@ -1568,16 +1613,18 @@
         const eEcon = this.economies[ef];
         const has = (k) => this.buildings.some((b) => b.faction === ef && b.kind === k && b.koTimer <= 0);
         const countB = (k) => this.buildings.filter((b) => b.faction === ef && b.kind === k && b.koTimer <= 0).length;
+        const genBuilding = this.buildings.some((b) => b.faction === ef && b.kind === 'generator' && b.buildProgress < 1 && b.koTimer <= 0);
+        const lowPwr = this.isLowPower(ef);
 
-        if (eEcon.powerConsumed >= eEcon.powerProduced - 10 && eEcon.supplies >= BUILDING_SPECS.generator.cost) {
+        if ((lowPwr || eEcon.powerConsumed >= eEcon.powerProduced - 10) && !genBuilding && eEcon.supplies >= BUILDING_SPECS.generator.cost) {
           this.tryAiBuild('generator', 2160, 320);
-        } else if (!has('motorpool') && eEcon.supplies >= BUILDING_SPECS.motorpool.cost) {
+        } else if (!lowPwr && !has('motorpool') && eEcon.supplies >= BUILDING_SPECS.motorpool.cost) {
           this.tryAiBuild('motorpool', 1860, 370);
-        } else if (this.elapsedTime > prof.techTime && !has('command') && eEcon.supplies >= BUILDING_SPECS.command.cost) {
+        } else if (!lowPwr && this.elapsedTime > prof.techTime && !has('command') && eEcon.supplies >= BUILDING_SPECS.command.cost) {
           this.tryAiBuild('command', 2140, 460);
-        } else if (countB('bunker') < prof.maxBunkers && eEcon.supplies >= BUILDING_SPECS.bunker.cost) {
+        } else if (!lowPwr && countB('bunker') < prof.maxBunkers && eEcon.supplies >= BUILDING_SPECS.bunker.cost) {
           this.tryAiBuild('bunker', 1760, 520);
-        } else if (this.hasTech(ef, 'command') && countB('heavyGun') < 2 && eEcon.supplies >= BUILDING_SPECS.heavyGun.cost) {
+        } else if (!lowPwr && this.hasTech(ef, 'command') && countB('heavyGun') < 2 && eEcon.supplies >= BUILDING_SPECS.heavyGun.cost) {
           this.tryAiBuild('heavyGun', 1780, 440);
         }
 
