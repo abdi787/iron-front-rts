@@ -9,6 +9,8 @@
   const ANIM_FPS = 20;
   const ANGLE_STOPS = 32;
   const ANGLE_STEP = (Math.PI * 2) / ANGLE_STOPS;
+  // Lock asset texel density in world space so zoom/viewport size never alters asset pixel resolution
+  const PIXEL_WORLD = 1.0;
   const snapAngle = (a) => Math.round(a / ANGLE_STEP) * ANGLE_STEP;
   const snapTime = (t) => Math.floor(t * ANIM_FPS) / ANIM_FPS;
   const snapVal = (v, steps) => Math.round(v * steps) / steps;
@@ -327,6 +329,8 @@
 
       this.fbo = null; this.fboTex = null; this.fboDepth = null;
       this.fboW = 0; this.fboH = 0;
+      this.maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+      this.sceneOut = { canvas: this.canvas, x: 0, y: 0, w: 0, h: 0 };
       this.mA = mat4Id(); this.mB = mat4Id(); this.mC = mat4Id(); this.mD = mat4Id();
       this.drawCalls = [];
     }
@@ -590,14 +594,34 @@
       const zoom = cam.zoom;
       const viewW = vw / zoom;
       const viewH = vh / zoom;
-      const pixelWorld = Math.max(1.0, Math.max(viewW, viewH) / 960);
-      const fboW = Math.max(64, Math.round(viewW / pixelWorld));
-      const fboH = Math.max(64, Math.round(viewH / pixelWorld));
+      const pixelWorld = PIXEL_WORLD;
+      const worldW = (FL.CONSTANTS && FL.CONSTANTS.WORLD_WIDTH) || 2400;
+      const worldH = (FL.CONSTANTS && FL.CONSTANTS.WORLD_HEIGHT) || 1600;
+      const maxWorldTexW = Math.ceil((worldW + 360) / pixelWorld);
+      const maxWorldTexH = Math.ceil((worldH + 360) / pixelWorld);
+
+      const fboW = Math.max(2, Math.min(this.maxTexSize, maxWorldTexW, Math.ceil(viewW / pixelWorld) + 2));
+      const fboH = Math.max(2, Math.min(this.maxTexSize, maxWorldTexH, Math.ceil(viewH / pixelWorld) + 2));
+
+      const rawCamX = cam.x + shakeX;
+      const rawCamY = cam.y + shakeY;
+      let wx0 = Math.floor((rawCamX - fboW * pixelWorld * 0.5) / pixelWorld) * pixelWorld;
+      let wy0 = Math.floor((rawCamY - fboH * pixelWorld * 0.5) / pixelWorld) * pixelWorld;
+      const minX = Math.floor(-180 / pixelWorld) * pixelWorld;
+      const maxX = Math.ceil((worldW + 180) / pixelWorld) * pixelWorld - fboW * pixelWorld;
+      const minY = Math.floor(-180 / pixelWorld) * pixelWorld;
+      const maxY = Math.ceil((worldH + 180) / pixelWorld) * pixelWorld - fboH * pixelWorld;
+      if (minX <= maxX) wx0 = Math.max(minX, Math.min(maxX, wx0));
+      if (minY <= maxY) wy0 = Math.max(minY, Math.min(maxY, wy0));
+
+      const fboViewW = fboW * pixelWorld;
+      const fboViewH = fboH * pixelWorld;
+      const camX = wx0 + fboViewW * 0.5;
+      const camY = wy0 + fboViewH * 0.5;
       this.ensureFbo(fboW, fboH);
 
-      const camX = cam.x + shakeX, camY = cam.y + shakeY;
-      const visMinX = camX - viewW * 0.5 - 120, visMaxX = camX + viewW * 0.5 + 120;
-      const visMinY = camY - viewH * 0.5 - 120, visMaxY = camY + viewH * 0.5 + 120;
+      const visMinX = wx0 - 120, visMaxX = wx0 + fboViewW + 120;
+      const visMinY = wy0 - 120, visMaxY = wy0 + fboViewH + 120;
       const inVis = (x, y) => x >= visMinX && x <= visMaxX && y >= visMinY && y <= visMaxY;
       const fog = sim.demoMode ? null : sim.fog;
 
@@ -667,7 +691,7 @@
       gl.enableVertexAttribArray(L.aMat);
       gl.enableVertexAttribArray(L.aAo);
       gl.uniform2f(L.uCamPos, camX, camY);
-      gl.uniform2f(L.uViewSize, viewW, viewH);
+      gl.uniform2f(L.uViewSize, fboViewW, fboViewH);
 
       gl.depthFunc(gl.LESS);
       gl.uniform1f(L.uShadowPass, 1.0);
@@ -727,7 +751,12 @@
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.disableVertexAttribArray(this.pLoc.aQuad);
 
-      return this.canvas;
+      this.sceneOut.canvas = this.canvas;
+      this.sceneOut.x = wx0;
+      this.sceneOut.y = wy0;
+      this.sceneOut.w = fboViewW;
+      this.sceneOut.h = fboViewH;
+      return this.sceneOut;
     }
 
     bakePortrait(spec) {

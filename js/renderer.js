@@ -201,15 +201,14 @@
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
-      ctx.restore();
 
-      const glCanvas = this.renderer3d.renderScene(vw, vh, sim, cam, sx, sy, hoverWorld);
+      const scene = this.renderer3d.renderScene(vw, vh, sim, cam, sx, sy, hoverWorld);
       ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(glCanvas, 0, 0, glCanvas.width, glCanvas.height, 0, 0, vw, vh);
-
-      ctx.save();
-      ctx.scale(z, z);
-      ctx.translate(-camLeft, -camTop);
+      ctx.drawImage(
+        scene.canvas,
+        0, 0, scene.canvas.width, scene.canvas.height,
+        scene.x, scene.y, scene.w, scene.h
+      );
 
       for (const rb of sim.repairBeams) {
         ctx.strokeStyle = rb.color || '#34D399';
