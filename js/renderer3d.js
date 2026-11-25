@@ -561,16 +561,18 @@
       const scaleZ = Math.max(0.25, 1 - d * 0.55);
       const bx = Math.round(b.x);
       const by = Math.round(b.y);
+      const baseAng = b.facingRad !== undefined ? b.facingRad : 0;
       const opts = {
         buildProg: bProg, hitFlash: (b.hitFlash || 0) > 0.1 ? 1 : 0, hologram, destroy: d,
         shadow: hologram === 0, zMin: baseMesh.minZ, zMax: baseMesh.maxZ
       };
-      mat4TRS(this.mA, 0, 0, collapseZ, d * 0.14, -d * 0.12, 0.55, 1, 1, scaleZ);
+      mat4TRS(this.mA, 0, 0, collapseZ, d * 0.14, -d * 0.12, baseAng, 1, 1, scaleZ);
       this.pushPart(baseMesh, this.mA, bx, by, opts);
 
-      if (b.buildProgress >= 0.98 && hologram === 0) {
-        if (b.kind === 'hq') {
-          mat4TRS(this.mB, -6, 6, 40 * scaleZ + collapseZ, d * 0.4, -d * 0.4, snapAngle(time * 0.9));
+      if (b.buildProgress >= 0.98) {
+        if (b.kind === 'hq' && hologram === 0) {
+          const ca = Math.cos(baseAng), sa = Math.sin(baseAng);
+          mat4TRS(this.mB, -6 * ca - 6 * sa, -6 * sa + 6 * ca, 40 * scaleZ + collapseZ, d * 0.4, -d * 0.4, snapAngle(time * 0.9));
           this.pushPart(M.bld_hq_head, this.mB, bx, by, { ...opts, zMin: 0, zMax: 58 });
         } else if (b.kind === 'bunker') {
           const kick = snapVal(b.recoil || 0, 5) * 3.2;
@@ -643,7 +645,7 @@
       for (const cp of sim.capturePoints) {
         if (!inVis(cp.x, cp.y)) continue;
         const owner = (!fog || fog.isVisible(cp.x, cp.y) || cp.owner === sim.playerFaction) ? (cp.owner || 'neutral') : 'neutral';
-        mat4TRS(this.mA, 0, 0, 0, 0, 0, 0.45);
+        mat4TRS(this.mA, 0, 0, 0, 0, 0, 0);
         this.pushPart(this.buildings[owner].outpost, this.mA, Math.round(cp.x), Math.round(cp.y), {});
       }
       for (const w of sim.wrecks) {
@@ -666,8 +668,9 @@
       }
       if (sim.placementMode && hoverWorld) {
         const ok = sim.canPlaceBuilding(sim.playerFaction, sim.placementMode, hoverWorld.x, hoverWorld.y).ok;
+        const pRad = sim.getPlacementRad();
         this.enqueueBuilding(
-          { kind: sim.placementMode, faction: sim.playerFaction, x: hoverWorld.x, y: hoverWorld.y, buildProgress: 1, angle: -0.7, koTimer: 0 },
+          { kind: sim.placementMode, faction: sim.playerFaction, x: hoverWorld.x, y: hoverWorld.y, buildProgress: 1, facingRad: pRad, angle: pRad, koTimer: 0 },
           sim.elapsedTime, ok ? 1 : -1
         );
       }

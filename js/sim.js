@@ -264,6 +264,7 @@
 
       this.economies = { red: this.mkEcon(500), green: this.mkEcon(500) };
       this.placementMode = null;
+      this.placementDir = 0;
       this.attackMoveMode = false;
       this.activePowerMode = null;
       this.supportPowers = this.mkPowers();
@@ -304,7 +305,7 @@
       this.projectiles = []; this.orderMarkers = []; this.wrecks = [];
       this.capturePoints = []; this.activeRadarScans = []; this.activeAirstrikes = [];
       this.repairBeams = [];
-      this.placementMode = null; this.attackMoveMode = false; this.activePowerMode = null;
+      this.placementMode = null; this.placementDir = 0; this.attackMoveMode = false; this.activePowerMode = null;
       this.supportPowers = this.mkPowers();
       this.alertText = null; this.alertTimer = 0; this.cameraTrauma = 0;
       this.elapsedTime = 0; this.outcome = null; this.pendingOutcome = null; this.defeatDelay = 0;
@@ -447,16 +448,21 @@
       this.fog && this.fog.update(this.units, this.buildings, this.activeRadarScans, pf, UNIT_SPECS, BUILDING_SPECS);
     }
 
-    spawnBuilding(faction, kind, x, y, built = true) {
+    spawnBuilding(faction, kind, x, y, built = true, facingDir = null) {
       const spec = BUILDING_SPECS[kind];
       const isSwBase = x < 1200 && y > 800;
+      const dir = facingDir !== null && facingDir !== undefined ? (((facingDir % 4) + 4) % 4) : (isSwBase ? 0 : 2);
+      const facingRad = dir * (Math.PI * 0.5);
+      const exitDist = spec.radius + 58;
       const b = {
         id: this.nextId++, kind, faction, x, y,
         hp: spec.maxHp, maxHp: spec.maxHp, displayHp: spec.maxHp,
-        angle: isSwBase ? -0.7 : 2.4,
+        facingDir: dir,
+        facingRad,
+        angle: facingRad,
         fireCooldown: 0, hitFlash: 0, recoil: 0,
-        rallyX: isSwBase ? x + 95 : x - 95,
-        rallyY: isSwBase ? y - 75 : y + 75,
+        rallyX: clamp(x + Math.cos(facingRad) * exitDist, 40, WORLD_WIDTH - 40),
+        rallyY: clamp(y + Math.sin(facingRad) * exitDist, 40, WORLD_HEIGHT - 40),
         queue: [], selected: false, koTimer: 0,
         buildProgress: built ? 1 : 0.05,
         repairing: false, isRepairing: false, repeatQueue: false, repeatKind: null
@@ -464,6 +470,19 @@
       this.buildings.push(b);
       this.recomputePower();
       return b;
+    }
+
+    getPlacementRad() {
+      return (((this.placementDir % 4) + 4) % 4) * (Math.PI * 0.5);
+    }
+
+    getPlacementDeg() {
+      return (((this.placementDir % 4) + 4) % 4) * 90;
+    }
+
+    rotatePlacement(step = 1) {
+      this.placementDir = (((this.placementDir + step) % 4) + 4) % 4;
+      return this.placementDir;
     }
 
     spawnUnit(faction, kind, x, y, materialize = false) {
@@ -576,16 +595,18 @@
       }
       const spec = BUILDING_SPECS[kind];
       this.economies[faction].supplies -= spec.cost;
-      const b = this.spawnBuilding(faction, kind, x, y, false);
+      const facingDir = faction === this.playerFaction ? this.placementDir : null;
+      const b = this.spawnBuilding(faction, kind, x, y, false, facingDir);
       if (faction === this.playerFaction) {
         this.placementMode = null;
         this.sound && this.sound.playBuild();
       }
       if (kind === 'depot') {
-        const isSw = x < 1200 && y > 800;
-        const hx = clamp(x + (isSw ? 68 : -68), 60, WORLD_WIDTH - 60);
-        const hy = clamp(y + (isSw ? -68 : 68), 60, WORLD_HEIGHT - 60);
+        const exitR = spec.radius + 26;
+        const hx = clamp(x + Math.cos(b.facingRad) * exitR, 60, WORLD_WIDTH - 60);
+        const hy = clamp(y + Math.sin(b.facingRad) * exitR, 60, WORLD_HEIGHT - 60);
         const h = this.spawnUnit(faction, this.getSupplyUnitKind(faction), hx, hy);
+        h.hullAngle = h.turretAngle = b.facingRad;
         h.order = 'harvest';
       }
       return b;
@@ -1041,10 +1062,12 @@
           item.remaining -= dt * speedMult;
           if (item.remaining <= 0) {
             b.queue.shift();
-            const isSw = b.x < 1200 && b.y > 800;
-            const sx = b.x + (isSw ? 46 : -46);
-            const sy = b.y + (isSw ? -46 : 46);
+            const exitR = spec.radius + 24;
+            const fRad = b.facingRad || 0;
+            const sx = clamp(b.x + Math.cos(fRad) * exitR, 40, WORLD_WIDTH - 40);
+            const sy = clamp(b.y + Math.sin(fRad) * exitR, 40, WORLD_HEIGHT - 40);
             const u = this.spawnUnit(b.faction, item.kind, sx, sy, true);
+            u.hullAngle = u.turretAngle = fRad;
             this.economies[b.faction].built++;
             if (UNIT_SPECS[u.kind].isHarvester) {
               u.order = 'harvest';

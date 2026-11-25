@@ -182,6 +182,20 @@
         ctx.lineWidth = 2;
         ctx.fillRect(hoverWorld.x - spec.footprintW * 0.5, hoverWorld.y - spec.footprintH * 0.36, spec.footprintW, spec.footprintH * 0.72);
         ctx.strokeRect(hoverWorld.x - spec.footprintW * 0.5, hoverWorld.y - spec.footprintH * 0.36, spec.footprintW, spec.footprintH * 0.72);
+        const fRad = sim.getPlacementRad();
+        const fx = hoverWorld.x + Math.cos(fRad) * (spec.footprintW * 0.5 + 8);
+        const fy = hoverWorld.y + Math.sin(fRad) * (spec.footprintH * 0.36 + 8);
+        ctx.save();
+        ctx.translate(fx, fy);
+        ctx.rotate(fRad);
+        ctx.fillStyle = ok ? '#BEF264' : '#FCA5A5';
+        ctx.beginPath();
+        ctx.moveTo(7, 0);
+        ctx.lineTo(-4, -5);
+        ctx.lineTo(-4, 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
         if (spec.range > 0 || spec.repairRadius) {
           const rr = spec.range || spec.repairRadius;
           ctx.setLineDash([6, 6]);

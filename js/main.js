@@ -60,6 +60,7 @@
     const selectionBar = document.getElementById('selectionBar');
     const modeBanner = document.getElementById('modeBanner');
     const modeBannerText = document.getElementById('modeBannerText');
+    const rotateModeBtn = document.getElementById('rotateModeBtn');
     const confirmModeBtn = document.getElementById('confirmModeBtn');
     const alertBanner = document.getElementById('alertBanner');
     const minimapWrap = document.getElementById('minimapWrap');
@@ -309,6 +310,12 @@
     };
     document.getElementById('pwrStrikeBtn').addEventListener('click', toggleArtilleryStrike);
 
+    rotateModeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!sim.placementMode) return;
+      sim.rotatePlacement(1);
+      sound.playClick();
+    });
     confirmModeBtn.addEventListener('click', () => {
       if (sim.placementMode) sim.placeBuilding(sim.playerFaction, sim.placementMode, lastHoverWorld.x, lastHoverWorld.y);
       else if (sim.activePowerMode) sim.triggerSupportPower(sim.activePowerMode, lastHoverWorld.x, lastHoverWorld.y);
@@ -548,6 +555,9 @@
         sim.phase = sim.phase === 'playing' ? 'paused' : 'playing';
       } else if (k === 'escape') {
         sim.placementMode = null; sim.activePowerMode = null; sim.attackMoveMode = false;
+      } else if (k === 'r' && sim.placementMode) {
+        sim.rotatePlacement(1);
+        sound.playClick();
       } else if (k === 'f') {
         sim.attackMoveMode = !sim.attackMoveMode;
       } else if (k === 'h') {
@@ -611,10 +621,13 @@
 
       if (sim.placementMode) {
         modeBannerText.textContent = `Постройка: ${BUILDING_SPECS[sim.placementMode].name}`;
+        rotateModeBtn.textContent = `↻ ${sim.getPlacementDeg()}°`;
+        rotateModeBtn.classList.remove('hidden');
         confirmModeBtn.textContent = 'Поставить';
         modeBanner.classList.remove('hidden');
       } else if (sim.activePowerMode) {
         modeBannerText.textContent = sim.activePowerMode === 'reconSweep' ? 'Авиа-разведка: цель' : 'Артудар: цель';
+        rotateModeBtn.classList.add('hidden');
         confirmModeBtn.textContent = 'Запуск';
         modeBanner.classList.remove('hidden');
       } else {
