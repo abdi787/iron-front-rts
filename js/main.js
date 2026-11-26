@@ -54,6 +54,7 @@
     const hudRoot = document.getElementById('hudRoot');
     const statusModal = document.getElementById('statusModal');
     const unitDock = document.getElementById('unitDock');
+    const unitSecPlate = document.getElementById('unitSecPlate');
     const buildDock = document.getElementById('buildDock');
     const unitSectionWrap = unitDock.closest('.dock-section');
     const buildSectionWrap = document.getElementById('buildSectionWrap');
@@ -71,22 +72,37 @@
     let touchBoxMode = false;
     let mobileDockTab = 'units';
     let lastHoverWorld = { x: 460, y: 1140 };
+    const mouseClient = { x: 0, y: 0, inside: false, overUi: false };
+    const isInteractiveTarget = (el) => !!(el && el.closest && el.closest('button, a, .cameo-card, #minimapWrap, #tacRack, #modeBanner, .modal-card'));
     const dragBox = { active: false, startX: 0, startY: 0, currX: 0, currY: 0 };
     const longPress = { active: false, x: 0, y: 0, progress: 0 };
     const keys = new Set();
 
     let unitBtns = {};
+    let unitDockHint = null;
     let activeUnitOrder = FACTION_UNITS.red;
     const buildBtns = {};
+    let lastAutoProdId = null;
+
+    function getSelectedProducer() {
+      const pf = sim.playerFaction;
+      const b = sim.buildings.find((x) => x.faction === pf && x.selected && x.koTimer <= 0);
+      return b && BUILDING_SPECS[b.kind].produces.length > 0 ? b : null;
+    }
 
     function rebuildUnitDock(faction) {
       unitDock.innerHTML = '';
       unitBtns = {};
+      unitDockHint = document.createElement('div');
+      unitDockHint.className = 'dock-hint';
+      unitDockHint.textContent = 'Выберите Ангар или Склад, чтобы заказать технику';
+      unitDock.appendChild(unitDockHint);
+
       activeUnitOrder = FACTION_UNITS[faction];
       for (const kind of activeUnitOrder) {
         const s = UNIT_SPECS[kind];
         const btn = document.createElement('button');
-        btn.className = 'cameo-card';
+        btn.className = 'cameo-card hidden';
         btn.title = `${s.name} — ${s.role}`;
         const tag = s.requiresTech ? '<span class="cameo-tag tech-req">СВЯЗЬ</span>' : '';
         btn.innerHTML = `
@@ -105,7 +121,9 @@
         `;
         btn.addEventListener('click', () => {
           sound.unlock();
-          sim.queueUnit(sim.playerFaction, kind);
+          const prod = getSelectedProducer();
+          if (!prod || prod.kind !== s.requiresBuilding) return;
+          sim.queueUnit(sim.playerFaction, kind, prod.id);
         });
         unitDock.appendChild(btn);
         unitBtns[kind] = {
@@ -210,6 +228,9 @@
       rebuildUnitDock(sim.playerFaction);
       rebuildBuildDock(sim.playerFaction);
       lastSelSig = '';
+      lastAutoProdId = null;
+      mobileDockTab = 'build';
+      syncDockTabs();
       cam.x = 460; cam.y = 1140;
       cam.zoom = window.innerWidth < 760 ? 0.85 : 1.0;
       cam.vx = 0; cam.vy = 0;
@@ -430,12 +451,19 @@
     });
 
     window.addEventListener('pointermove', (e) => {
-      if (sim.phase !== 'playing') return;
       if (e.pointerType !== 'touch') {
+        if (e.pointerType === 'mouse') {
+          mouseClient.x = e.clientX;
+          mouseClient.y = e.clientY;
+          mouseClient.inside = true;
+          mouseClient.overUi = isInteractiveTarget(e.target);
+        }
+        if (sim.phase !== 'playing') return;
         lastHoverWorld = screenToWorld(e.clientX, e.clientY);
         if (mouseDrag) { dragBox.currX = e.clientX; dragBox.currY = e.clientY; }
         return;
       }
+      if (sim.phase !== 'playing') return;
 
       if (!activeTouches.has(e.pointerId)) return;
       activeTouches.set(e.pointerId, { id: e.pointerId, x: e.clientX, y: e.clientY });
@@ -574,8 +602,15 @@
         if (e.ctrlKey) sim.saveControlGroup(slot);
         else sim.selectControlGroup(slot);
       } else {
+        const prod = getSelectedProducer();
         for (const uk of activeUnitOrder) {
-          if (UNIT_SPECS[uk].hotkey.toLowerCase() === k) sim.queueUnit(sim.playerFaction, uk);
+          if (UNIT_SPECS[uk].hotkey.toLowerCase() === k) {
+            if (prod && UNIT_SPECS[uk].requiresBuilding === prod.kind) {
+              sim.queueUnit(sim.playerFaction, uk, prod.id);
+            } else {
+              sim.showAlert(UNIT_SPECS[uk].requiresBuilding === 'depot' ? 'Выберите Склад' : 'Выберите Ангар');
+            }
+          }
         }
         for (const bk of BUILD_ORDER) {
           if (BUILDING_SPECS[bk].hotkey.toLowerCase() === k) {
@@ -586,6 +621,8 @@
       }
     });
     window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
+    document.addEventListener('mouseleave', () => { mouseClient.inside = false; });
+    window.addEventListener('blur', () => { mouseClient.inside = false; keys.clear(); });
 
     const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     let hudTick = 0;
@@ -650,36 +687,57 @@
       document.getElementById('pwrStrikeBtn').classList.toggle('active', sim.activePowerMode === 'artilleryBarrage');
 
       const hasHq = sim.buildings.some((b) => b.faction === pf && b.kind === 'hq' && b.koTimer <= 0);
-      const hasFac = sim.buildings.some((b) => b.faction === pf && b.kind === 'motorpool' && b.koTimer <= 0 && b.buildProgress >= 1);
       const hasTech = sim.hasTech(pf, 'command');
       const lowPwr = sim.isLowPower(pf);
+      const selProd = getSelectedProducer();
 
-      let anyUnitBusy = false;
+      if (selProd) {
+        if (selProd.id !== lastAutoProdId) {
+          lastAutoProdId = selProd.id;
+          if (mobileDockTab !== 'units') {
+            mobileDockTab = 'units';
+            syncDockTabs();
+          }
+        }
+      } else {
+        lastAutoProdId = null;
+      }
+
+      if (unitSecPlate) {
+        unitSecPlate.textContent = !selProd
+          ? 'ТЕХНИКА · ВЫБЕРИТЕ ЗДАНИЕ'
+          : selProd.kind === 'depot'
+            ? (selProd.buildProgress < 1 ? 'СКЛАД · СТРОИТСЯ' : 'СКЛАД · СНАБЖЕНИЕ')
+            : (selProd.buildProgress < 1 ? 'АНГАР · СТРОИТСЯ' : 'АНГАР · БОЕВАЯ ТЕХНИКА');
+      }
+      if (unitDockHint) {
+        unitDockHint.classList.toggle('hidden', !!selProd);
+      }
+
       for (const kind of activeUnitOrder) {
         const s = UNIT_SPECS[kind];
         const entry = unitBtns[kind];
         if (!entry) continue;
         const { btn, shutter, hbar, hfill, queueEl } = entry;
-        const prodOk = s.requiresBuilding === 'hq' ? hasHq : hasFac;
+        const showCard = !!selProd && s.requiresBuilding === selProd.kind;
+        btn.classList.toggle('hidden', !showCard);
+        if (!showCard) continue;
+
+        const prodReady = selProd.buildProgress >= 1;
         const techOk = !s.requiresTech || hasTech;
-        btn.disabled = !prodOk || !techOk || pe.supplies < s.cost;
-        btn.classList.toggle('locked', !prodOk || !techOk);
+        btn.disabled = !prodReady || !techOk || pe.supplies < s.cost;
+        btn.classList.toggle('locked', !prodReady || !techOk);
 
         let qCount = 0;
         let firstItem = null;
-        let firstBld = null;
-        for (const b of sim.buildings) {
-          if (b.faction !== pf || b.kind !== s.requiresBuilding) continue;
-          for (const qi of b.queue) {
-            if (qi.kind === kind) {
-              qCount++;
-              if (!firstItem && b.queue[0] === qi) { firstItem = qi; firstBld = b; }
-            }
+        for (const qi of selProd.queue) {
+          if (qi.kind === kind) {
+            qCount++;
+            if (!firstItem && selProd.queue[0] === qi) firstItem = qi;
           }
         }
-        if (qCount > 0) anyUnitBusy = true;
         const pct = firstItem ? Math.max(0, Math.min(100, Math.round((1 - firstItem.remaining / firstItem.total) * 100))) : 0;
-        const paused = !!(firstBld && !sim.isBuildingPowered(firstBld));
+        const paused = !!(selProd.buildProgress >= 1 && !sim.isBuildingPowered(selProd));
         queueEl.textContent = qCount > 1 ? `×${qCount}` : qCount === 1 ? '1' : '';
         queueEl.classList.toggle('on', qCount > 0);
         btn.classList.toggle('active', !!firstItem);
@@ -688,6 +746,7 @@
         hbar.classList.toggle('paused', paused);
         hfill.style.width = `${pct}%`;
       }
+      const anyUnitBusy = sim.buildings.some((b) => b.faction === pf && b.koTimer <= 0 && b.queue.length > 0);
       document.getElementById('tabUnitsDot').classList.toggle('busy', anyUnitBusy);
 
       let anyBldBusy = false;
@@ -800,10 +859,41 @@
 
       if (sim.phase === 'playing') {
         const panSpd = 650 / cam.zoom;
-        if (keys.has('w') || keys.has('arrowup')) cam.y -= panSpd * dt;
-        if (keys.has('s') || keys.has('arrowdown')) cam.y += panSpd * dt;
-        if (keys.has('a') || keys.has('arrowleft')) cam.x -= panSpd * dt;
-        if (keys.has('d') || keys.has('arrowright')) cam.x += panSpd * dt;
+        let panX = 0, panY = 0;
+        if (keys.has('w') || keys.has('arrowup')) panY -= 1;
+        if (keys.has('s') || keys.has('arrowdown')) panY += 1;
+        if (keys.has('a') || keys.has('arrowleft')) panX -= 1;
+        if (keys.has('d') || keys.has('arrowright')) panX += 1;
+
+        if (mouseClient.inside && !mouseDrag && !minimapDrag && !touchState) {
+          const edgeX = 28;
+          const edgeY = 20;
+          const outerRim = 10;
+          const { x: mx, y: my, overUi } = mouseClient;
+          let ex = 0, ey = 0;
+          if (!overUi || mx <= outerRim || mx >= vw - outerRim) {
+            if (mx < edgeX) ex = -(0.35 + 0.65 * (1 - Math.max(0, mx) / edgeX));
+            else if (mx > vw - edgeX) ex = 0.35 + 0.65 * (1 - Math.max(0, vw - mx) / edgeX);
+          }
+          if (!overUi || my <= outerRim || my >= vh - outerRim) {
+            if (my < edgeY) ey = -(0.35 + 0.65 * (1 - Math.max(0, my) / edgeY));
+            else if (my > vh - edgeY) ey = 0.35 + 0.65 * (1 - Math.max(0, vh - my) / edgeY);
+          }
+          if (ex !== 0 || ey !== 0) {
+            const len = Math.hypot(ex, ey);
+            if (len > 1) { ex /= len; ey /= len; }
+            panX += ex;
+            panY += ey;
+          }
+        }
+
+        const movedCam = panX !== 0 || panY !== 0;
+        if (movedCam) {
+          const pLen = Math.hypot(panX, panY);
+          if (pLen > 1) { panX /= pLen; panY /= pLen; }
+          cam.x += panX * panSpd * dt;
+          cam.y += panY * panSpd * dt;
+        }
 
         if (!touchState && (Math.abs(cam.vx) > 6 || Math.abs(cam.vy) > 6)) {
           cam.x += cam.vx * dt;
@@ -814,6 +904,9 @@
           cam.vx = 0; cam.vy = 0;
         }
         clampCam();
+        if (movedCam && mouseClient.inside) {
+          lastHoverWorld = screenToWorld(mouseClient.x, mouseClient.y);
+        }
 
         if (touchState && touchState.mode === 'pending') {
           const held = now - touchState.startT;

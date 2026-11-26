@@ -654,6 +654,20 @@ html, body {
 }
 .cameo-rail::-webkit-scrollbar { display: none; }
 
+.dock-hint {
+  display: flex;
+  align-items: center;
+  min-height: 68px;
+  padding: 8px 14px;
+  border: 1px dashed #4a4033;
+  border-radius: 4px;
+  background: rgba(12, 16, 12, 0.55);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
 /* Skeuomorphic 3D Unit/Building Cameo Button */
 .cameo-card {
   appearance: none;

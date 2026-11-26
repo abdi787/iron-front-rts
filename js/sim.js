@@ -41,10 +41,10 @@
   const BUILD_ORDER = ['generator', 'depot', 'motorpool', 'bunker', 'workshop', 'command', 'heavyGun'];
 
   const VETERANCY_SPECS = {
-    0: { rank: 0, xp: 0,   dmgTaken: 1.00, rof: 1.00, dmgDeal: 1.00, regen: 0 },
-    1: { rank: 1, xp: 90,  dmgTaken: 0.85, rof: 1.18, dmgDeal: 1.12, regen: 0 },
-    2: { rank: 2, xp: 220, dmgTaken: 0.72, rof: 1.32, dmgDeal: 1.25, regen: 6 },
-    3: { rank: 3, xp: 400, dmgTaken: 0.60, rof: 1.48, dmgDeal: 1.42, regen: 12 }
+    0: { rank: 0, xp: 0, dmgTaken: 1.00, rof: 1.00, dmgDeal: 1.00, regen: 0 },
+    1: { rank: 1, xp: 1, dmgTaken: 0.85, rof: 1.18, dmgDeal: 1.12, regen: 0 },
+    2: { rank: 2, xp: 2, dmgTaken: 0.72, rof: 1.32, dmgDeal: 1.25, regen: 6 },
+    3: { rank: 3, xp: 3, dmgTaken: 0.60, rof: 1.48, dmgDeal: 1.42, regen: 12 }
   };
 
   const UNIT_SPECS = {
@@ -53,7 +53,7 @@
       kind: 'red_supply_truck', faction: 'red', name: 'Снабженец', role: 'Сбор припасов', hotkey: 'Q',
       cost: 150, buildTime: 5.5, maxHp: 245, speed: 74, turnSpeed: 3.4, turretTurn: 0,
       radius: 18, range: 0, sight: 225, damage: 0, cooldown: 1, projSpeed: 0, splash: 0, burst: 0,
-      isHarvester: true, supplyCapacity: 110, harvestRate: 34, requiresBuilding: 'hq', salvage: 0
+      isHarvester: true, supplyCapacity: 110, harvestRate: 34, requiresBuilding: 'depot', salvage: 0
     },
     red_buggy: {
       kind: 'red_buggy', faction: 'red', name: 'Багги', role: 'Быстрый разведчик', hotkey: 'Z',
@@ -103,7 +103,7 @@
       kind: 'green_supply_truck', faction: 'green', name: 'Грузовик', role: 'Сбор припасов', hotkey: 'Q',
       cost: 150, buildTime: 5.5, maxHp: 245, speed: 74, turnSpeed: 3.4, turretTurn: 0,
       radius: 18, range: 0, sight: 225, damage: 0, cooldown: 1, projSpeed: 0, splash: 0, burst: 0,
-      isHarvester: true, supplyCapacity: 110, harvestRate: 34, requiresBuilding: 'hq', salvage: 0
+      isHarvester: true, supplyCapacity: 110, harvestRate: 34, requiresBuilding: 'depot', salvage: 0
     },
     green_humvee: {
       kind: 'green_humvee', faction: 'green', name: 'Хамви', role: 'Манёвренный разведчик', hotkey: 'Z',
@@ -151,10 +151,10 @@
 
   const BUILDING_SPECS = {
     hq: {
-      kind: 'hq', name: 'Штаб-Бункер', role: 'База · Сбор припасов', hotkey: '',
+      kind: 'hq', name: 'Штаб-Бункер', role: 'База · Радиус стройки', hotkey: '',
       cost: 0, buildTime: 0, maxHp: 1500, radius: 44, footprintW: 90, footprintH: 90,
       powerDelta: 30, sight: 420, range: 0, damage: 0, cooldown: 0, buildable: false, canSell: false,
-      produces: ['supply']
+      produces: []
     },
     generator: {
       kind: 'generator', name: 'Дизель-ген.', role: '+50 энергии', hotkey: '4',
@@ -163,10 +163,10 @@
       produces: []
     },
     depot: {
-      kind: 'depot', name: 'Склад', role: 'Приём + Грузовик', hotkey: '5',
+      kind: 'depot', name: 'Склад', role: 'Приём + Снабженцы', hotkey: '5',
       cost: 230, buildTime: 5.0, maxHp: 650, radius: 38, footprintW: 80, footprintH: 80,
       powerDelta: -15, sight: 245, range: 0, damage: 0, cooldown: 0, buildable: true, canSell: true,
-      produces: []
+      produces: ['supply']
     },
     motorpool: {
       kind: 'motorpool', name: 'Ангар', role: 'Производство техники', hotkey: '6',
@@ -207,19 +207,19 @@
 
   const AI_PROFILES = {
     easy: {
-      playerStartSup: 660, enemyStartSup: 300, startGen: 1, startBunkers: 1, startRecon: 1, startTanks: 1,
-      passiveSup: 1, maxSupplyTrucks: 1, decInt: 5.8, prodMult: 0.70, armyCap: 7, maxBunkers: 2,
-      techTime: 185, firstWave: 72, waveInt: 56, minSquad: 2, maxSquad: 4, useBarrage: false
+      playerStartSup: 950, enemyStartSup: 700,
+      passiveSup: 2, maxSupplyTrucks: 1, decInt: 5.5, prodMult: 0.72, armyCap: 7, maxBunkers: 2,
+      techTime: 185, firstWave: 85, waveInt: 56, minSquad: 2, maxSquad: 4, useBarrage: false
     },
     normal: {
-      playerStartSup: 520, enemyStartSup: 490, startGen: 2, startBunkers: 1, startRecon: 1, startTanks: 2,
-      passiveSup: 4, maxSupplyTrucks: 2, decInt: 3.1, prodMult: 0.98, armyCap: 12, maxBunkers: 2,
-      techTime: 115, firstWave: 44, waveInt: 35, minSquad: 3, maxSquad: 5, useBarrage: false
+      playerStartSup: 800, enemyStartSup: 800,
+      passiveSup: 4, maxSupplyTrucks: 2, decInt: 3.0, prodMult: 0.98, armyCap: 12, maxBunkers: 2,
+      techTime: 120, firstWave: 60, waveInt: 36, minSquad: 3, maxSquad: 5, useBarrage: false
     },
     hard: {
-      playerStartSup: 450, enemyStartSup: 680, startGen: 2, startBunkers: 2, startRecon: 2, startTanks: 2,
-      passiveSup: 11, maxSupplyTrucks: 2, decInt: 1.7, prodMult: 1.15, armyCap: 18, maxBunkers: 3,
-      techTime: 56, firstWave: 24, waveInt: 24, minSquad: 4, maxSquad: 8, useBarrage: true
+      playerStartSup: 700, enemyStartSup: 950,
+      passiveSup: 10, maxSupplyTrucks: 2, decInt: 1.7, prodMult: 1.15, armyCap: 18, maxBunkers: 3,
+      techTime: 65, firstWave: 42, waveInt: 24, minSquad: 4, maxSquad: 8, useBarrage: true
     }
   };
 
@@ -410,38 +410,11 @@
         [ef]: this.mkEcon(prof.enemyStartSup)
       };
 
-      // Player SW Base
+      // Player SW Base (HQ only — build base & economy from scratch)
       this.spawnBuilding(pf, 'hq', 360, 1240, true);
-      this.spawnBuilding(pf, 'generator', 220, 1260, true);
-      this.spawnBuilding(pf, 'depot', 240, 1110, true);
-      this.spawnBuilding(pf, 'motorpool', 540, 1230, true);
-      this.spawnBuilding(pf, 'bunker', 625, 1105, true);
 
-      const pSupply = this.getSupplyUnitKind(pf);
-      const pRecon = pf === 'red' ? 'red_buggy' : 'green_humvee';
-      const pTank = pf === 'red' ? 'red_light_tank' : 'green_medium_tank';
-      this.spawnUnit(pf, pSupply, 280, 1040);
-      this.spawnUnit(pf, pRecon, 560, 1120);
-      this.spawnUnit(pf, pTank, 520, 1100);
-      this.spawnUnit(pf, pTank, 610, 1200);
-
-      // Enemy NE Base
+      // Enemy NE Base (HQ only)
       this.spawnBuilding(ef, 'hq', 2040, 360, true);
-      for (let i = 0; i < prof.startGen; i++) {
-        this.spawnBuilding(ef, 'generator', 2180, 340 + i * 95, true);
-      }
-      this.spawnBuilding(ef, 'depot', 2160, 490, true);
-      this.spawnBuilding(ef, 'motorpool', 1860, 370, true);
-      for (let i = 0; i < prof.startBunkers; i++) {
-        this.spawnBuilding(ef, 'bunker', 1775 - i * 40, 495 + i * 75, true);
-      }
-
-      const eSupply = this.getSupplyUnitKind(ef);
-      const eRecon = ef === 'red' ? 'red_buggy' : 'green_humvee';
-      const eTank = ef === 'red' ? 'red_light_tank' : 'green_medium_tank';
-      this.spawnUnit(ef, eSupply, 2120, 560);
-      for (let i = 0; i < prof.startRecon; i++) this.spawnUnit(ef, eRecon, 1830 + i * 45, 480);
-      for (let i = 0; i < prof.startTanks; i++) this.spawnUnit(ef, eTank, 1880 - i * 50, 460);
 
       this.aiWaveTimer = prof.firstWave;
       this.recomputePower();
@@ -601,18 +574,10 @@
         this.placementMode = null;
         this.sound && this.sound.playBuild();
       }
-      if (kind === 'depot') {
-        const exitR = spec.radius + 26;
-        const hx = clamp(x + Math.cos(b.facingRad) * exitR, 60, WORLD_WIDTH - 60);
-        const hy = clamp(y + Math.sin(b.facingRad) * exitR, 60, WORLD_HEIGHT - 60);
-        const h = this.spawnUnit(faction, this.getSupplyUnitKind(faction), hx, hy);
-        h.hullAngle = h.turretAngle = b.facingRad;
-        h.order = 'harvest';
-      }
       return b;
     }
 
-    queueUnit(faction, kind) {
+    queueUnit(faction, kind, buildingId = null) {
       const spec = UNIT_SPECS[kind];
       if (!spec || spec.faction !== faction) return false;
       if (spec.requiresTech && !this.hasTech(faction, spec.requiresTech)) {
@@ -620,10 +585,13 @@
         return false;
       }
       const producers = this.buildings.filter(
-        (b) => b.faction === faction && b.kind === spec.requiresBuilding && b.koTimer <= 0 && b.buildProgress >= 1
+        (b) => b.faction === faction && b.kind === spec.requiresBuilding && b.koTimer <= 0 && b.buildProgress >= 1 &&
+          (buildingId === null || b.id === buildingId)
       );
       if (producers.length === 0) {
-        if (faction === this.playerFaction) this.showAlert(spec.requiresBuilding === 'hq' ? 'Нужен Штаб-Бункер' : 'Постройте Ангар');
+        if (faction === this.playerFaction) {
+          this.showAlert(spec.requiresBuilding === 'depot' ? 'Выберите достроенный Склад' : 'Выберите достроенный Ангар');
+        }
         return false;
       }
       if (this.economies[faction].supplies < spec.cost) {
@@ -637,6 +605,7 @@
 
       this.economies[faction].supplies -= spec.cost;
       chosen.queue.push({ kind, total: spec.buildTime, remaining: spec.buildTime });
+      if (chosen.repeatQueue) chosen.repeatKind = kind;
       if (faction === this.playerFaction) {
         if (!this.isBuildingPowered(chosen)) this.showAlert('Ангар обесточен: выпуск на паузе — постройте Дизель-ген.');
         this.sound && this.sound.playClick();
@@ -1035,6 +1004,18 @@
               this.effects && this.effects.spawnText(b.x, b.y - 28, `+${spec.powerDelta} ⚡`, '#86EFAC');
               this.sound && this.sound.playSupply();
             }
+            if (b.kind === 'depot') {
+              const exitR = spec.radius + 26;
+              const fRad = b.facingRad || 0;
+              const hx = clamp(b.x + Math.cos(fRad) * exitR, 60, WORLD_WIDTH - 60);
+              const hy = clamp(b.y + Math.sin(fRad) * exitR, 60, WORLD_HEIGHT - 60);
+              const h = this.spawnUnit(b.faction, this.getSupplyUnitKind(b.faction), hx, hy, true);
+              h.hullAngle = h.turretAngle = fRad;
+              h.order = 'harvest';
+              if (b.faction === this.playerFaction && !this.demoMode) {
+                this.sound && this.sound.playSupply();
+              }
+            }
           }
           continue;
         }
@@ -1077,7 +1058,7 @@
               u.targetY = b.rallyY + (Math.random() - 0.5) * 32;
             }
             if (b.repeatQueue && b.repeatKind) {
-              this.queueUnit(b.faction, b.repeatKind);
+              this.queueUnit(b.faction, b.repeatKind, b.id);
             }
           }
         }
@@ -1528,31 +1509,35 @@
       target.hp -= dmg;
       target.hitFlash = 1;
 
-      if (attackerUnitId) {
-        const atk = this.units.find((u) => u.id === attackerUnitId);
-        if (atk && atk.koTimer <= 0) {
-          atk.lastCombatTime = this.elapsedTime;
-          atk.xp += dmg;
-          if (atk.rank < 3 && atk.xp >= VETERANCY_SPECS[atk.rank + 1].xp) {
-            atk.rank++;
-            if (atk.faction === this.playerFaction && !this.demoMode) {
-              this.effects && this.effects.spawnText(atk.x, atk.y - 24, `★ РАНГ ${atk.rank}`, '#FBBF24');
-            }
-          }
-        }
+      const atk = attackerUnitId ? this.units.find((u) => u.id === attackerUnitId) : null;
+      if (atk && atk.koTimer <= 0) {
+        atk.lastCombatTime = this.elapsedTime;
       }
 
       if (target.hp <= 0) {
         target.hp = 0;
         const isBuilding = !!BUILDING_SPECS[target.kind];
+        const uSpec = !isBuilding ? UNIT_SPECS[target.kind] : null;
         target.koTimer = isBuilding ? 0.55 : 0.48;
         target.selected = false;
         this.cameraTrauma = Math.min(1, this.cameraTrauma + (isBuilding ? 0.45 : 0.16));
         this.sound && this.sound.playExplosion(isBuilding);
         this.effects && this.effects.spawnExplosion(target.x, target.y, isBuilding);
 
-        if (!isBuilding && UNIT_SPECS[target.kind].salvage > 0) {
-          const val = UNIT_SPECS[target.kind].salvage;
+        // Award veterancy kill only on the killing blow against enemy combat units (buildings & harvesters excluded).
+        if (!isBuilding && uSpec && !uSpec.isHarvester && atk && atk.koTimer <= 0 && target.faction !== atk.faction) {
+          const prevRank = atk.rank;
+          atk.xp += 1;
+          while (atk.rank < 3 && atk.xp >= VETERANCY_SPECS[atk.rank + 1].xp) {
+            atk.rank++;
+          }
+          if (atk.rank > prevRank && atk.faction === this.playerFaction && !this.demoMode) {
+            this.effects && this.effects.spawnText(atk.x, atk.y - 24, `★ РАНГ ${atk.rank}`, '#FBBF24');
+          }
+        }
+
+        if (!isBuilding && uSpec.salvage > 0) {
+          const val = uSpec.salvage;
           this.wrecks.push({
             id: this.nextId++, kind: target.kind, faction: target.faction,
             x: target.x, y: target.y, hullAngle: target.hullAngle,
@@ -1638,13 +1623,22 @@
         const countB = (k) => this.buildings.filter((b) => b.faction === ef && b.kind === k && b.koTimer <= 0).length;
         const genBuilding = this.buildings.some((b) => b.faction === ef && b.kind === 'generator' && b.buildProgress < 1 && b.koTimer <= 0);
         const lowPwr = this.isLowPower(ef);
+        let effProd = 0, effCons = 0;
+        for (const b of this.buildings) {
+          if (b.faction !== ef || b.koTimer > 0) continue;
+          const d = BUILDING_SPECS[b.kind].powerDelta;
+          if (d >= 0) effProd += d;
+          else effCons += -d;
+        }
 
-        if ((lowPwr || eEcon.powerConsumed >= eEcon.powerProduced - 10) && !genBuilding && eEcon.supplies >= BUILDING_SPECS.generator.cost) {
-          this.tryAiBuild('generator', 2160, 320);
+        if ((lowPwr || effCons >= effProd - 10) && !genBuilding && eEcon.supplies >= BUILDING_SPECS.generator.cost) {
+          this.tryAiBuild('generator', 2180, 340);
+        } else if (!has('depot') && eEcon.supplies >= BUILDING_SPECS.depot.cost) {
+          this.tryAiBuild('depot', 2160, 490);
         } else if (!lowPwr && !has('motorpool') && eEcon.supplies >= BUILDING_SPECS.motorpool.cost) {
           this.tryAiBuild('motorpool', 1860, 370);
         } else if (!lowPwr && this.elapsedTime > prof.techTime && !has('command') && eEcon.supplies >= BUILDING_SPECS.command.cost) {
-          this.tryAiBuild('command', 2140, 460);
+          this.tryAiBuild('command', 2020, 220);
         } else if (!lowPwr && countB('bunker') < prof.maxBunkers && eEcon.supplies >= BUILDING_SPECS.bunker.cost) {
           this.tryAiBuild('bunker', 1760, 520);
         } else if (!lowPwr && this.hasTech(ef, 'command') && countB('heavyGun') < 2 && eEcon.supplies >= BUILDING_SPECS.heavyGun.cost) {
@@ -1652,8 +1646,13 @@
         }
 
         const supKind = this.getSupplyUnitKind(ef);
-        const harvs = this.units.filter((u) => u.faction === ef && u.kind === supKind).length;
-        if (harvs < prof.maxSupplyTrucks && eEcon.supplies >= UNIT_SPECS[supKind].cost) {
+        const buildingDepot = this.buildings.some((b) => b.faction === ef && b.kind === 'depot' && b.buildProgress < 1 && b.koTimer <= 0);
+        const queuedHarvs = this.buildings.reduce(
+          (n, b) => n + (b.faction === ef && b.kind === 'depot' && b.koTimer <= 0 ? b.queue.filter((q) => q.kind === supKind).length : 0),
+          0
+        );
+        const harvs = this.units.filter((u) => u.faction === ef && u.kind === supKind && u.koTimer <= 0).length + queuedHarvs + (buildingDepot ? 1 : 0);
+        if (harvs < prof.maxSupplyTrucks && eEcon.supplies >= UNIT_SPECS[supKind].cost && this.hasTech(ef, 'depot')) {
           this.queueUnit(ef, supKind);
         }
 
@@ -1704,9 +1703,9 @@
     }
 
     tryAiBuild(kind, px, py) {
-      for (let attempt = 0; attempt < 8; attempt++) {
-        const x = px + (Math.random() - 0.5) * 260;
-        const y = py + (Math.random() - 0.5) * 260;
+      for (let attempt = 0; attempt < 16; attempt++) {
+        const x = px + (Math.random() - 0.5) * 300;
+        const y = py + (Math.random() - 0.5) * 300;
         if (this.canPlaceBuilding(this.enemyFaction, kind, x, y).ok) {
           return this.placeBuilding(this.enemyFaction, kind, x, y);
         }
@@ -1771,7 +1770,7 @@
       let best = null, bestD2 = Infinity;
       for (const b of this.buildings) {
         if (b.faction !== faction || b.koTimer > 0 || b.buildProgress < 1) continue;
-        if (b.kind !== 'hq' && b.kind !== 'depot') continue;
+        if (b.kind !== 'depot') continue;
         const d2 = distSq(x, y, b.x, b.y);
         if (d2 < bestD2) { bestD2 = d2; best = b; }
       }

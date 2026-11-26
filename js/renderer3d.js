@@ -323,7 +323,10 @@
 
       const rawProps = buildPropMeshes();
       this.props = {
-        supply: rawProps.supply.map((m) => this.uploadMesh(m)),
+        supply: rawProps.supply.map((s) => ({
+          base: this.uploadMesh(s.base),
+          items: s.items.map((m) => this.uploadMesh(m))
+        })),
         rock: rawProps.rock.map((m) => this.uploadMesh(m))
       };
 
@@ -632,9 +635,14 @@
       for (const s of sim.supplyNodes) {
         if (s.amount <= 0 || !inVis(s.x, s.y)) continue;
         if (fog && !fog.isExplored(s.x, s.y)) continue;
-        const sc = 0.65 + (s.amount / s.maxAmount) * 0.35;
-        mat4TRS(this.mA, 0, 0, 0, 0, 0, s.variant * 1.1, sc, sc, sc);
-        this.pushPart(this.props.supply[s.variant], this.mA, Math.round(s.x), Math.round(s.y), {});
+        const prop = this.props.supply[s.variant % this.props.supply.length];
+        const ratio = Math.max(0, Math.min(1, s.amount / Math.max(1, s.maxAmount)));
+        const activeItems = Math.max(1, Math.ceil(ratio * prop.items.length));
+        mat4TRS(this.mA, 0, 0, 0, 0, 0, s.variant * 1.1, 1, 1, 1);
+        this.pushPart(prop.base, this.mA, Math.round(s.x), Math.round(s.y), {});
+        for (let i = 0; i < activeItems; i++) {
+          this.pushPart(prop.items[i], this.mA, Math.round(s.x), Math.round(s.y), {});
+        }
       }
       for (const r of sim.obstacles) {
         if (!inVis(r.x, r.y)) continue;

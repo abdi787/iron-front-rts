@@ -198,23 +198,71 @@
 
   function buildPropMeshes() {
     const P = { supply: [], rock: [] };
-    const pallet = [0.46, 0.33, 0.21];
+    const pallet = [0.48, 0.34, 0.22];
+    const palletAlt = [0.41, 0.29, 0.19];
+    const woodDark = [0.31, 0.21, 0.14];
     const crateO = [0.44, 0.48, 0.26];
+    const crateODark = [0.32, 0.36, 0.19];
     const tarpT = [0.82, 0.67, 0.36];
+    const tarpDark = [0.60, 0.47, 0.23];
+    const ammoCol = [0.56, 0.54, 0.46];
     const drumY = [0.89, 0.65, 0.18];
     const drumR = [0.76, 0.21, 0.18];
+    const drumRim = [0.20, 0.19, 0.18];
     const mesa1 = [0.54, 0.39, 0.27];
     const mesa2 = [0.44, 0.32, 0.23];
 
     for (let v = 0; v < 2; v++) {
-      const b = new MeshBuilder();
-      b.bevelBox(0, 0, 2.2, 26, 24, 4.4, 0.6, pallet, 0, 0, 0.74, 0.94);
       const s = v === 0 ? 1 : -1;
-      b.bevelBox(-4 * s, -4, 9.5, 13, 12, 10.5, 0.9, crateO, 0, 0, 0.80, 1.0);
-      b.bevelBox(5 * s, 5, 11.0, 11, 11, 13.5, 1.0, tarpT, 0, 0, 0.82, 1.0);
-      b.cylZ(-6 * s, 6, 4.2, 3.4, 3.4, 9.2, 10, drumY, 0, 0);
-      b.cylZ(6 * s, -6, 4.2, 3.4, 3.4, 9.2, 10, drumR, 0, 0);
-      P.supply.push(b.finish());
+
+      const base = new MeshBuilder();
+      for (const sy of [-8.0, 0, 8.0]) {
+        base.bevelBox(0, sy, 1.1, 26.5, 3.6, 2.2, 0.3, woodDark, 0, 0, 0.70, 0.88);
+      }
+      const plankXs = [-10.2, -3.4, 3.4, 10.2];
+      plankXs.forEach((px, idx) => {
+        base.bevelBox(px, 0, 3.3, 5.8, 24.5, 2.2, 0.4, idx % 2 === 0 ? pallet : palletAlt, 0, 0, 0.76, 0.96);
+      });
+
+      const items = [];
+
+      // 0: Main olive crate (remains until depleted)
+      const c0 = new MeshBuilder();
+      c0.bevelBox(-4.8 * s, -4.5, 9.6, 13.0, 12.0, 10.4, 0.9, crateO, 0, 0, 0.80, 1.0);
+      c0.bevelBox(-4.8 * s, -4.5, 14.6, 13.6, 12.6, 1.6, 0.4, crateODark, 0, 0, 0.82, 1.0);
+      items.push(c0.finish());
+
+      // 1: Tan tarped container
+      const c1 = new MeshBuilder();
+      c1.bevelBox(5.2 * s, 4.8, 10.9, 11.4, 11.4, 13.0, 1.0, tarpT, 0, 0, 0.82, 1.0);
+      c1.box(5.2 * s, 4.8, 11.2, 11.8, 2.2, 12.8, tarpDark, 0, 0, 0.78, 0.96);
+      items.push(c1.finish());
+
+      // 2: Yellow fuel drum
+      const d0 = new MeshBuilder();
+      d0.cylZ(-6.6 * s, 6.4, 4.4, 3.5, 3.5, 9.6, 10, drumY, 0, 0);
+      d0.cylZ(-6.6 * s, 6.4, 8.6, 3.75, 3.75, 1.3, 10, drumRim, 0, 0);
+      items.push(d0.finish());
+
+      // 3: Red fuel drum
+      const d1 = new MeshBuilder();
+      d1.cylZ(6.6 * s, -6.2, 4.4, 3.5, 3.5, 9.6, 10, drumR, 0, 0);
+      d1.cylZ(6.6 * s, -6.2, 8.6, 3.75, 3.75, 1.3, 10, drumRim, 0, 0);
+      items.push(d1.finish());
+
+      // 4: Stacked ammo crate on olive container
+      const c2 = new MeshBuilder();
+      c2.bevelBox(-4.8 * s, -4.5, 18.1, 8.2, 7.2, 5.4, 0.6, ammoCol, 0, 0, 0.82, 1.0);
+      c2.box(-4.8 * s, -4.5, 18.2, 8.5, 1.8, 1.6, drumY, 0, 0, 0.85, 1.0);
+      items.push(c2.finish());
+
+      // 5: Top red keg on tan container
+      const d2 = new MeshBuilder();
+      d2.cylZ(5.2 * s, 4.8, 17.6, 2.7, 2.7, 6.2, 10, drumR, 0, 0);
+      d2.cylZ(5.2 * s, 4.8, 23.8, 1.0, 1.0, 0.9, 8, drumRim, 0, 0);
+      items.push(d2.finish());
+
+      P.supply.push({ base: base.finish(), items });
     }
 
     for (let v = 0; v < 3; v++) {
