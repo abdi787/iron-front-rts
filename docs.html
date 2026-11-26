@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRON FRONT — Architecture &amp; AI Agent Reference</title>
+  <style>
+    :root {
+      --bg: #13100d;
+      --panel: #1d1813;
+      --panel-2: #262019;
+      --border: #4a3f31;
+      --text: #ece4d4;
+      --muted: #a69a85;
+      --brass: #ebb83a;
+      --red: #e0463c;
+      --green: #87a343;
+      --cyan: #56c2ff;
+      --emerald: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px 64px;
+      background: radial-gradient(circle at 50% 0%, #241d17 0%, var(--bg) 65%);
+      color: var(--text);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    main { max-width: 1080px; margin: 0 auto; }
+    header.hero {
+      background: linear-gradient(180deg, #2d261e 0%, var(--panel) 100%);
+      border: 1px solid var(--border);
+      border-top: 4px solid var(--brass);
+      border-radius: 6px;
+      padding: 18px 20px;
+      margin-bottom: 18px;
+    }
+    .hero-top { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+    h1 { margin: 0; font-size: 20px; letter-spacing: 0.06em; color: var(--brass); }
+    .nav-links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn {
+      appearance: none; cursor: pointer; text-decoration: none;
+      background: var(--panel-2); color: var(--text);
+      border: 1px solid var(--border); border-radius: 4px;
+      padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 700;
+    }
+    .btn:hover { border-color: var(--brass); color: var(--brass); }
+    .btn.primary { background: #3c2e14; border-color: var(--brass); color: #fde68a; }
+    .toc { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 12px; font-size: 12px; }
+    .toc a { color: var(--cyan); text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 18px;
+      margin-bottom: 16px;
+    }
+    h2 { margin: 0 0 10px; font-size: 15px; color: var(--brass); border-bottom: 1px solid #352c22; padding-bottom: 5px; }
+    h3 { margin: 14px 0 6px; font-size: 13px; color: var(--cyan); }
+    p, ul, ol { margin: 6px 0; }
+    ul, ol { padding-left: 20px; }
+    code { color: #fde68a; background: #14110d; padding: 1px 4px; border-radius: 3px; }
+    pre {
+      margin: 8px 0; padding: 10px 12px;
+      background: #100d0a; border: 1px solid #382f25; border-radius: 4px;
+      overflow-x: auto; font-size: 12px; color: #e5dccb;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+    th, td { border: 1px solid #382f25; padding: 5px 7px; text-align: left; vertical-align: top; }
+    th { background: #262019; color: var(--brass); }
+    .tag-red { color: var(--red); font-weight: 700; }
+    .tag-green { color: var(--green); font-weight: 700; }
+    .warn { border-left: 3px solid var(--red); padding: 6px 10px; background: rgba(224, 70, 60, 0.08); margin: 8px 0; }
+    .ok { border-left: 3px solid var(--emerald); padding: 6px 10px; background: rgba(52, 211, 153, 0.08); margin: 8px 0; }
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="hero-top">
+      <div>
+        <h1>IRON FRONT — Project &amp; AI Agent Documentation</h1>
+        <p style="color:var(--muted);margin:4px 0 0;">Self-contained developer briefing for <code>red_vs_olive_rts</code> (<code>abdi787/iron-front-rts</code>). Read this file once to understand the whole codebase.</p>
+      </div>
+      <div class="nav-links">
+        <button id="copyBriefBtn" class="btn primary" type="button">Copy AI Agent Brief</button>
+        <a class="btn" href="index.html">Play Game</a>
+        <a class="btn" href="showcase.html">16-Unit Showcase</a>
+      </div>
+    </div>
+    <nav class="toc">
+      <a href="#brief">1. AI Agent Brief</a>
+      <a href="#files">2. File &amp; Module Map</a>
+      <a href="#render3d">3. 3D-to-Pixel Pipeline</a>
+      <a href="#sim">4. Simulation &amp; Rules</a>
+      <a href="#roster">5. Units, Buildings &amp; Specs</a>
+      <a href="#ui">6. UI, Canvas Bars &amp; Controls</a>
+      <a href="#playbooks">7. Extension Playbooks &amp; Gotchas</a>
+    </nav>
+  </header>
+
+  <section id="brief">
+    <h2>1. AI Agent Bootstrap Brief</h2>
+    <p>Copy or point a fresh AI conversation to this section (or this file) to orient immediately without rescanning all 8,400+ lines:</p>
+    <pre id="agentBriefPre">Project: IRON FRONT — Red Dominion vs Olive Vanguard (2D/3D procedural Pixel-Art browser RTS)
+Repo / Dir: /data/data/com.termux/files/home/red_vs_olive_rts/ (GitHub: abdi787/iron-front-rts, Pages on main /)
+Stack: Pure vanilla HTML5 + CSS + WebGL 1 + Canvas2D + Web Audio API. Zero npm/bundler/external deps.
+Namespace: Every runtime JS file is an IIFE attaching exports onto window.FRONTLINE (FL).
+Load Order (index.html):
+  1. js/mesh_core.js       -> FL.MESH_CORE (MeshBuilder, RED_PAL, GREEN_PAL, NEUTRAL_PAL, part helpers)
+  2. js/units_meshes.js    -> FL.UNIT_MESHES.buildUnitMeshes() (16 procedural vehicles)
+  3. js/buildings_meshes.js-> FL.BUILDING_MESHES.{buildFactionBuildings, buildPropMeshes} (8 blds + props)
+  4. js/sim.js             -> FL.CONSTANTS, FL.RtsSimulation (headless fixed-cap dt <= 0.05s RTS engine)
+  5. js/renderer3d.js      -> FL.Pixel3DRenderer (2-pass WebGL->FBO->outline shader + portrait baker)
+  6. js/fog.js             -> FL.FogOfWar (32px tile visibility/explored texture)
+  7. js/particles.js       -> FL.EffectsPool (particles, beams, rings, decals, floating texts)
+  8. js/sound.js           -> FL.SoundEngine (procedural Web Audio SFX)
+  9. js/renderer.js        -> FL.GameRenderer (terrain bake, world Canvas2D + WebGL FBO blit, world bars, minimap)
+ 10. js/main.js            -> boot() (DOM bindings, camera pan/zoom, pointer/touch/keys, 0.09s HUD sync loop)
+
+Critical Invariants (DO NOT BREAK):
+- Render cadence: ANIM_FPS = 20, ANGLE_STOPS = 32 (11.25 deg step) in js/renderer3d.js.
+- Zoom-invariant pixel resolution: PIXEL_WORLD = 1.0 in js/renderer3d.js. FBO dimensions & world origin (wx0, wy0) lock to integer world units; renderer.js draws scene.canvas in world coordinates (scene.x, scene.y, scene.w, scene.h) with imageSmoothingEnabled=false. Never couple pixelWorld to cam.zoom or viewport width.
+- Orthogonal buildings: Building facingDir is 0..3 (0, 90, 180, 270 deg; facingRad = facingDir * PI/2). Never hardcode diagonal base rotation. Units exit motorpool/depot along facingRad.
+- C&C Power Rules: recomputePower() counts both powerProduced and powerConsumed ONLY for completed living buildings (buildProgress >= 1). Construction continues during low power. On isLowPower(), motorpool queues pause, bunker/heavyGun turrets stop firing, workshop stops healing, command radar stops & artilleryBarrage locks ("Нет ⚡"), while hq/generator/depot dropoff remain active to prevent softlocks.
+- World Status Bars (renderer.js): Construction/unit-queue/spawn/repair horizontal progress bars render directly BENEATH buildings (bBot) and units (uBot); HP + animated repair wrench (drawRepairBadge) + low-power icon (drawLowPowerBadge) render ABOVE entities.
+- showcase.html (1,334 lines) is standalone & inline-duplicates meshes/shaders rather than importing js/*.js.</pre>
+  </section>
+
+  <section id="files">
+    <h2>2. File Inventory &amp; Architecture Map</h2>
+    <table>
+      <thead>
+        <tr><th>File</th><th>Lines</th><th>Exports / DOM Role</th><th>Key Responsibilities</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>index.html</code></td><td>242</td><td>Title + HUD + Footer Dock + Modal</td><td>Loads all 10 scripts sequentially; contains <code>#rotateModeBtn</code>, <code>#modeBanner</code>, <code>#selectionBar</code>, <code>#unitDock</code>, <code>#buildDock</code>.</td></tr>
+        <tr><td><code>style.css</code></td><td>945</td><td>Riveted steel skeuomorphic UI</td><td>Cameo cards (<code>.cameo-card</code>, <code>.cameo-hbar</code>), responsive layout breakpoints (1240 / 860 / 580px), CSS animations (<code>wrenchRock</code>, <code>pwrCardPulse</code>, <code>offlineBlink</code>).</td></tr>
+        <tr><td><code>showcase.html</code></td><td>1334</td><td>Standalone 16-Unit Inspector</td><td>Self-contained 3D vs Pixel Art split-screen viewer (<code>Low..Max</code> FBO presets, <code>20fps·32</code> vs <code>60fps</code> toggle, slice/build slider). Does not load <code>js/*.js</code>.</td></tr>
+        <tr><td><code>js/mesh_core.js</code></td><td>414</td><td><code>FL.MESH_CORE</code></td><td>12-float vertex <code>MeshBuilder</code> (<code>wedge</code>, <code>bevelBox</code>, <code>bevelWedge</code>, <code>box</code>, <code>cylZ/X/Y</code>, <code>torusZ</code>, <code>sphere</code>, <code>dish</code>), palettes, <code>addWheel</code>, <code>addTrackPod</code>, <code>addCanvasTarp</code>.</td></tr>
+        <tr><td><code>js/units_meshes.js</code></td><td>504</td><td><code>FL.UNIT_MESHES</code></td><td><code>buildUnitMeshes()</code> generates <code>_hull</code>, <code>_turret</code>, <code>_barrel</code>, <code>_orb</code> VBO data for 8 Red + 8 Green vehicles.</td></tr>
+        <tr><td><code>js/buildings_meshes.js</code></td><td>232</td><td><code>FL.BUILDING_MESHES</code></td><td><code>buildFactionBuildings(pal, fk)</code> for 8 buildings + turret/dish heads + oil <code>outpost</code>; <code>buildPropMeshes()</code> for crates &amp; rocks.</td></tr>
+        <tr><td><code>js/sim.js</code></td><td>1795</td><td><code>FL.CONSTANTS</code>, <code>FL.RtsSimulation</code></td><td>Game state, specs, AI profiles, path/steering/collision, harvesting/salvage, weapons/projectiles/splash, C&amp;C power rules, repair flags, victory checks.</td></tr>
+        <tr><td><code>js/renderer3d.js</code></td><td>936</td><td><code>FL.Pixel3DRenderer</code></td><td>2-pass WebGL renderer: geometry+shadow pass into <code>RGBA+DEPTH16</code> FBO + height-contour outline post-pass + startup portrait PNG baker (<code>bakeAllPortraits</code>).</td></tr>
+        <tr><td><code>js/fog.js</code></td><td>123</td><td><code>FL.FogOfWar</code></td><td><code>75×50</code> grid (<code>FOG_TILE = 32</code>) updated per step from player unit/building sight and active radar scans; writes <code>Uint32Array</code> canvas texture.</td></tr>
+        <tr><td><code>js/particles.js</code></td><td>132</td><td><code>FL.EffectsPool</code></td><td>Capped pools for particles (440), decals (260), rings (48), beams, and floating world texts.</td></tr>
+        <tr><td><code>js/sound.js</code></td><td>230</td><td><code>FL.SoundEngine</code></td><td>Procedural oscillator + filtered white-noise Web Audio API effects unlocked on first pointer interaction.</td></tr>
+        <tr><td><code>js/renderer.js</code></td><td>609</td><td><code>FL.GameRenderer</code></td><td>Static <code>1200×800</code> terrain/concrete-pad canvas bake, world compositing, selection/placement chevron, <code>drawWorldBar</code>, <code>drawRepairBadge</code>, <code>drawLowPowerBadge</code>, minimap.</td></tr>
+        <tr><td><code>js/main.js</code></td><td>867</td><td><code>boot()</code></td><td>Canvas DPR resize loop, desktop/touch camera pan &amp; pinch-zoom (<code>0.6..1.6</code>), hotkeys (incl. <code>R</code> rotate), throttled <code>0.09s</code> <code>syncHud()</code>.</td></tr>
+      </tbody>
+    </table>
+    <p class="ok"><strong>Service &amp; Deployment:</strong> Serve locally via <code>python3 -m http.server 8080</code>. Pushes to <code>origin/main</code> on <code>abdi787/iron-front-rts</code> deploy automatically via GitHub Pages (legacy root <code>/</code>).</p>
+  </section>
+
+  <section id="render3d">
+    <h2>3. 3D-to-Pixel Art Pipeline Mechanics</h2>
+    <h3>Vertex Format &amp; Coordinate Convention</h3>
+    <ul>
+      <li><strong>Interleaved buffer (<code>MeshBuilder</code>):</strong> 12 <code>float32</code> values (48 bytes) per vertex: <code>[x, y, z, nx, ny, nz, r, g, b, emissive, matId, vAo]</code>.</li>
+      <li><strong><code>matId</code> shader switches (<code>ENTITY_FRAG</code>):</strong> <code>0</code> armor/concrete micro-grain; <code>1</code> ribbed tracks/rubber; <code>2</code> yellow/dark hazard stripes; <code>3</code> segmented carapace/terrain; <code>4</code> glossy glass/emissive high-specularity metal.</li>
+      <li><strong>Top-down oblique orthographic projection (<code>ENTITY_VERT</code>):</strong>
+        <pre>sx = (uEntityPos.x + ox) - uCamPos.x
+sy = (uEntityPos.y - uCamPos.y) + oy * 0.68 - oz * 0.73</pre>
+        Ground depth foreshortens along <code>Y</code> by <code>0.68</code> while vertical height <code>Z</code> shifts UP by <code>-0.73</code>. During <code>uShadowPass &gt; 0.5</code>, vertices shear across the ground plane via <code>ox += oz * 0.72; oy -= oz * 0.36; oz = 0.0;</code> at fixed depth <code>0.95</code>.
+      </li>
+    </ul>
+
+    <h3>Height-Packed Outline &amp; Zoom-Locked FBO</h3>
+    <ul>
+      <li><strong>Alpha height packing:</strong> Solid geometry writes <code>gl_FragColor.a = 0.58 + clamp(vHeightZ / 76.0, 0.0, 1.0) * 0.41</code>; shadow fragments write <code>0.44</code> alpha.</li>
+      <li><strong>Post-pass (<code>POST_FRAG</code>):</strong> Samples 4 cardinal neighbors with <code>uTexel</code>. If <code>c.a &gt;= 0.56</code>, detects internal elevation steps (<code>stepH = 0.024</code>) to shade bottom-right rims darker (<code>0.72</code>) or top-left ledges brighter (<code>1.08</code>). Exterior pixels adjacent to solid geometry draw 1-texel dark ink <code>vec3(0.072, 0.066, 0.088)</code>; remaining ground shadows render at <code>0.36</code> alpha.</li>
+      <li><strong>Zoom invariance (<code>PIXEL_WORLD = 1.0</code>):</strong> <code>renderScene()</code> allocates <code>fboW, fboH</code> directly in fixed world texels (capped by <code>maxTexSize</code> and world + 180px padding) and snaps <code>(wx0, wy0)</code> to integer <code>PIXEL_WORLD</code> boundaries to avoid pan shimmer. <code>GameRenderer.renderWorld</code> blits <code>scene.canvas</code> inside the active world camera matrix at <code>(scene.x, scene.y, scene.w, scene.h)</code> with <code>ctx.imageSmoothingEnabled = false</code>.</li>
+      <li><strong>Cameo Portraits:</strong> Startup calls <code>renderer3d.bakeAllPortraits()</code>, rendering each of the 16 units + 7 buildable buildings per faction into <code>78×62</code> PNG data URLs stored on portrait cards.</li>
+    </ul>
+  </section>
+
+  <section id="sim">
+    <h2>4. Simulation Architecture, Power &amp; Repair Rules</h2>
+    <h3>Core Loop (<code>RtsSimulation.step(rawDt)</code>)</h3>
+    <ol>
+      <li>Clamp <code>dt = Math.min(0.05, Math.max(0, rawDt))</code>; pause/gameover short-circuits early.</li>
+      <li>Clear transient frame flags: <code>repairBeams.length = 0</code>, all <code>b.isRepairing = false</code>, all <code>u.isRepairing = false</code> &amp; <code>u.repairKind = null</code>.</li>
+      <li>Run <code>updateCapturePoints(dt)</code> (3 oil outposts at <code>[760,560]</code>, <code>[1200,800]</code>, <code>[1640,1040]</code>), <code>updateSupportPowers(dt)</code>, <code>updateBuildings(dt)</code>, <code>updateUnits(dt)</code>, <code>resolveCollisions()</code>, <code>updateProjectiles(dt)</code>, <code>cleanupDestroyed(dt)</code>, <code>effects.update(dt)</code>.</li>
+      <li>In active matches (<code>!demoMode</code>), add AI passive income, run <code>updateEnemyAi(dt)</code>, check win/loss (all enemy/player buildings koTimer&lt;=0 count === 0 triggers <code>1.2s</code> end delay), and refresh <code>FogOfWar</code>.</li>
+    </ol>
+
+    <h3>Command &amp; Conquer Power Grid Rules</h3>
+    <ul>
+      <li><code>recomputePower()</code> iterates living <strong>completed</strong> buildings only (<code>b.koTimer &lt;= 0 &amp;&amp; b.buildProgress &gt;= 1</code>). Placing a building does <strong>not</strong> alter <code>powerProduced</code> or <code>powerConsumed</code> until construction hits <code>100%</code>.</li>
+      <li>Construction (<code>b.buildProgress &lt; 1</code>) always runs normally even during Low Power so players can build <code>generator</code> (<code>+50</code>) to recover.</li>
+      <li>When <code>isLowPower(faction)</code> is true (<code>powerConsumed &gt; powerProduced</code>), <code>isBuildingPowered(b)</code> returns <code>false</code> for power consumers <code>motorpool</code>, <code>bunker</code>, <code>heavyGun</code>, <code>workshop</code>, and <code>command</code>:
+        <ul>
+          <li><code>motorpool</code> pauses unit production queues.</li>
+          <li><code>bunker</code> &amp; <code>heavyGun</code> turrets stop scanning/rotating/firing.</li>
+          <li><code>workshop</code> stops repairing nearby vehicles.</li>
+          <li><code>command</code> stops rotating its dish; player <code>artilleryBarrage</code> locks (<code>powered = false</code>) and pauses cooldown recovery.</li>
+          <li><code>hq</code>, <code>generator</code>, and passive <code>depot</code> dropoffs stay powered/usable so the economy cannot permanently deadlock. Destroying an enemy building immediately triggers <code>recomputePower()</code> inside <code>applyDamage()</code>.</li>
+        </ul>
+      </li>
+    </ul>
+
+    <h3>Repair, Salvage &amp; Veterancy</h3>
+    <ul>
+      <li><strong>Manual Building Repair:</strong> Selected damaged buildings toggle <code>b.repairing</code>, healing <code>36 * dt</code> HP at <code>0.24</code> supplies per HP and setting <code>b.isRepairing = true</code>.</li>
+      <li><strong>Field Unit Repair:</strong> Powered <code>workshop</code> (radius <code>195</code>, <code>30/s</code>) and repair APCs (<code>red_apc_truck</code> r<code>165</code> / <code>12/s</code>; <code>green_apc_8x8</code> r<code>150</code> / <code>10/s</code>) heal one damaged ally per frame and flag <code>u.isRepairing = true; u.repairKind = 'field'</code>.</li>
+      <li><strong>Veteran Auto-Repair:</strong> Ranks <code>0..3</code> unlock at XP <code>0 / 90 / 220 / 400</code>. Rank <code>2</code> grants <code>regen: 6</code> HP/s and Rank <code>3</code> grants <code>regen: 12</code> HP/s when <code>elapsedTime - u.lastCombatTime &gt;= 5.0</code>, setting <code>u.isRepairing = true; u.repairKind = u.repairKind || 'auto'</code>.</li>
+      <li><strong>Salvage Wrecks:</strong> Destroyed combat units drop salvageable wrecks; harvesters automatically collect wrecks within <code>260</code> world units before mining supply crates.</li>
+    </ul>
+  </section>
+
+  <section id="roster">
+    <h2>5. Complete Roster, Buildings, Powers &amp; AI Tables</h2>
+    <h3>Units — <span class="tag-red">Red Dominion</span> vs <span class="tag-green">Olive Vanguard</span></h3>
+    <table>
+      <thead>
+        <tr><th>Kind ID</th><th>Faction</th><th>Key</th><th>Cost</th><th>HP</th><th>Range</th><th>Dmg / CD</th><th>Requires / Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>red_supply_truck</code></td><td>Red</td><td>Q</td><td>150</td><td>245</td><td>0</td><td>—</td><td><code>hq</code> · Harvester (cap 110, 34/s)</td></tr>
+        <tr><td><code>red_buggy</code></td><td>Red</td><td>Z</td><td>85</td><td>110</td><td>185</td><td>11×2 / 0.42s</td><td><code>motorpool</code> · Fast scout (sight 420)</td></tr>
+        <tr><td><code>red_light_tank</code></td><td>Red</td><td>X</td><td>165</td><td>265</td><td>245</td><td>35 / 1.22s</td><td><code>motorpool</code> · Shell (splash 18)</td></tr>
+        <tr><td><code>red_halftrack</code></td><td>Red</td><td>C</td><td>195</td><td>310</td><td>255</td><td>22×2 / 0.86s</td><td><code>motorpool</code> · Twin shell (splash 16)</td></tr>
+        <tr><td><code>red_apc_truck</code></td><td>Red</td><td>V</td><td>230</td><td>390</td><td>170</td><td>12×2 / 0.65s</td><td><code>motorpool</code> · Repair aura r165 (12 HP/s)</td></tr>
+        <tr><td><code>red_flame_tank</code></td><td>Red</td><td>B</td><td>270</td><td>400</td><td>175</td><td>30 / 0.52s</td><td><code>motorpool</code> · Splash 34, ×1.35 vs bldgs</td></tr>
+        <tr><td><code>red_mortar</code></td><td>Red</td><td>N</td><td>340</td><td>225</td><td>420</td><td>72 / 2.85s</td><td><code>motorpool</code> + <code>command</code> · Siege arc splash 66</td></tr>
+        <tr><td><code>red_orb_disruptor</code></td><td>Red</td><td>M</td><td>410</td><td>370</td><td>285</td><td>56 / 1.75s</td><td><code>motorpool</code> + <code>command</code> · Splash 54 + 2.5s slow</td></tr>
+        <tr><td><code>green_supply_truck</code></td><td>Green</td><td>Q</td><td>150</td><td>245</td><td>0</td><td>—</td><td><code>hq</code> · Harvester (cap 110, 34/s)</td></tr>
+        <tr><td><code>green_humvee</code></td><td>Green</td><td>Z</td><td>90</td><td>125</td><td>190</td><td>11×2 / 0.42s</td><td><code>motorpool</code> · Fast scout (sight 420)</td></tr>
+        <tr><td><code>green_medium_tank</code></td><td>Green</td><td>X</td><td>175</td><td>295</td><td>250</td><td>37 / 1.25s</td><td><code>motorpool</code> · Shell (splash 20)</td></tr>
+        <tr><td><code>green_apc_8x8</code></td><td>Green</td><td>C</td><td>215</td><td>340</td><td>225</td><td>18×2 / 0.72s</td><td><code>motorpool</code> · Repair aura r150 (10 HP/s)</td></tr>
+        <tr><td><code>green_missile_truck</code></td><td>Green</td><td>V</td><td>290</td><td>205</td><td>405</td><td>64 / 2.45s</td><td><code>motorpool</code> · Long-range missile splash 58</td></tr>
+        <tr><td><code>green_laser_tank</code></td><td>Green</td><td>B</td><td>310</td><td>350</td><td>275</td><td>44 / 1.05s</td><td><code>motorpool</code> · Instant hitscan laser</td></tr>
+        <tr><td><code>green_ion_tank</code></td><td>Green</td><td>N</td><td>390</td><td>465</td><td>305</td><td>66 / 1.48s</td><td><code>motorpool</code> + <code>command</code> · Ion beam splash 28</td></tr>
+        <tr><td><code>green_radar_truck</code></td><td>Green</td><td>M</td><td>350</td><td>290</td><td>320</td><td>34 / 1.65s</td><td><code>motorpool</code> + <code>command</code> · Sight 480, EMP slow 2.2s</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Buildings, Support Powers &amp; AI</h3>
+    <table>
+      <thead>
+        <tr><th>Kind</th><th>Key</th><th>Cost</th><th>Time</th><th>HP / R / Footprint</th><th>Power</th><th>Role / Special</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>hq</code></td><td>—</td><td>—</td><td>—</td><td>1500 / 44 / 90×90</td><td>+30</td><td>Produces harvesters; enables base placement within 380u.</td></tr>
+        <tr><td><code>generator</code></td><td>4</td><td>110</td><td>3.4s</td><td>450 / 30 / 64×64</td><td>+50</td><td>Powers grid; highlighted pulsing red during Low Power.</td></tr>
+        <tr><td><code>depot</code></td><td>5</td><td>230</td><td>5.0s</td><td>650 / 38 / 80×80</td><td>-15</td><td>Supply dropoff; spawns 1 free harvester on placement along <code>facingRad</code>.</td></tr>
+        <tr><td><code>motorpool</code></td><td>6</td><td>275</td><td>6.0s</td><td>820 / 42 / 88×88</td><td>-20</td><td>Produces combat units (queue max 6); pauses on Low Power.</td></tr>
+        <tr><td><code>bunker</code></td><td>7</td><td>150</td><td>3.2s</td><td>420 / 24 / 50×50</td><td>-15</td><td>Base defense turret (range 290, dmg 25, cd 0.72s); off on Low Power.</td></tr>
+        <tr><td><code>workshop</code></td><td>8</td><td>195</td><td>4.3s</td><td>530 / 34 / 72×72</td><td>-15</td><td>Auto-repairs 1 ally within radius 195 (30 HP/s); off on Low Power.</td></tr>
+        <tr><td><code>command</code></td><td>9</td><td>315</td><td>5.6s</td><td>590 / 36 / 74×74</td><td>-25</td><td>Unlocks Tier-2 units, <code>heavyGun</code>, and <code>artilleryBarrage</code>.</td></tr>
+        <tr><td><code>heavyGun</code></td><td>0</td><td>290</td><td>4.2s</td><td>520 / 26 / 54×54</td><td>-25</td><td>Needs <code>command</code>. Range 365, dmg 70, cd 1.30s (Red shell splash 32 / Green instant ion beam).</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Support Powers:</strong> <code>reconSweep</code> (Key <code>T</code>, CD 35s, r360, 10s reveal) &amp; <code>artilleryBarrage</code> (Key <code>G</code>, requires <code>command</code> + grid powered, CD 55s, 2.0s delay, r160, 250 dmg).<br/>
+       <strong>AI Profiles:</strong> <code>easy</code> (660 vs 300 sup, +1/s, wave 72s, prod 0.70×), <code>normal</code> (520 vs 490 sup, +4/s, wave 44s, prod 0.98×), <code>hard</code> (450 vs 680 sup, +11/s, wave 24s, prod 1.15×, uses barrage).</p>
+  </section>
+
+  <section id="ui">
+    <h2>6. UI Layer, Canvas Overlays &amp; Controls</h2>
+    <ul>
+      <li><strong>World Canvas Entity Overlays (<code>js/renderer.js</code>):</strong>
+        <ul>
+          <li><em>Above entities:</em> HP bar (shown when selected or damaged), gold rank pips, control-group digit, animated rocking wrench + <code>+</code> halo (<code>drawRepairBadge</code>), and blinking red <code>⚡</code> badge (<code>drawLowPowerBadge</code>) on offline completed buildings.</li>
+          <li><em>Directly beneath entities (<code>drawWorldBar</code>):</em> Horizontal status bars at <code>bBot = b.y + spec.radius * 0.68 + 4</code> and <code>uBot = u.y + spec.radius * 0.72 + 4</code> showing building construction progress + <code>%</code>, factory production queue + <code>×N</code> (or red striped <code>⚡</code> when offline), unit spawn progress, and green healing bars with inline animated <code>drawMiniWrench</code>.</li>
+        </ul>
+      </li>
+      <li><strong>HUD Sync &amp; CSS Animation Safety (<code>js/main.js</code>):</strong> <code>syncHud()</code> runs every <code>0.09s</code>. <code>#selectionBar</code> caches structural signature <code>lastSelSig</code> so CSS keyframe animations (<code>.rep-wrench-svg</code> <code>wrenchRock</code>, <code>.pwr-off-badge</code>) do not reset every 90ms.</li>
+      <li><strong>Orthogonal Building Placement:</strong> Players rotate buildings across <code>0° / 90° / 180° / 270°</code> via hotkey <code>R</code> or <code>#rotateModeBtn</code> on <code>#modeBanner</code>; green/red placement box draws a directional chevron indicating ramp/exit facing.</li>
+      <li><strong>Controls:</strong> <code>LMB</code> drag box / double-click select type · <code>RMB</code> move/attack/rally/cancel · <code>Wheel</code>/2-finger pinch zoom (<code>0.6..1.6</code>) · <code>WASD</code>/Arrows pan · <code>1–3</code> / <code>Ctrl+1–3</code> squads · <code>Q..M</code> units · <code>4..0</code> buildings · <code>R</code> rotate · <code>F</code> attack-move · <code>H</code> hold · <code>T/G</code> powers · <code>Home</code> HQ · <code>P</code> pause · Touch 1-finger pan / hold-230ms selection box.</li>
+    </ul>
+  </section>
+
+  <section id="playbooks">
+    <h2>7. Extension Playbooks &amp; Known Gotchas</h2>
+    <h3>Playbook: Adding a New Unit</h3>
+    <ol>
+      <li>Add mesh builder calls producing <code>M.&lt;kind&gt;_hull</code> (and optional <code>_turret</code>, <code>_barrel</code>) inside <code>js/units_meshes.js</code>.</li>
+      <li>Add stats entry to <code>UNIT_SPECS</code> and append key to <code>FACTION_UNITS.red|green</code> in <code>js/sim.js</code>.</li>
+      <li>Add draw switch branch in <code>Pixel3DRenderer.enqueueUnit</code> and camera framing tuple <code>[span, midZ]</code> in <code>bakeAllPortraits().unitCfg</code> inside <code>js/renderer3d.js</code>.</li>
+      <li><em>Optional:</em> Mirror mesh &amp; catalog metadata inside standalone <code>showcase.html</code> if inspecting it there too.</li>
+    </ol>
+
+    <h3>Playbook: Adding a New Building</h3>
+    <ol>
+      <li>Add <code>B.bld_&lt;kind&gt;</code> (front oriented along <code>+X</code> at <code>0°</code>!) in <code>js/buildings_meshes.js</code>.</li>
+      <li>Add spec in <code>BUILDING_SPECS</code> &amp; key in <code>BUILD_ORDER</code> in <code>js/sim.js</code>; wire behavior in <code>updateBuildings</code> guarding active systems with <code>if (... &amp;&amp; powered)</code>.</li>
+      <li>Add optional rotating head/turret logic in <code>enqueueBuilding</code> and entry in <code>bakeAllPortraits().bldCfg</code> inside <code>js/renderer3d.js</code>.</li>
+    </ol>
+
+    <div class="warn">
+      <strong>Top 6 Agent Pitfalls to Avoid:</strong>
+      <ol>
+        <li><strong><code>depot</code> harvester timing nuance:</strong> Currently <code>placeBuilding()</code> in <code>sim.js</code> spawns the free harvester immediately upon placing a <code>depot</code> (out along <code>b.facingRad</code>), whereas power deltas wait for <code>buildProgress &gt;= 1</code>. Keep that intentional difference in mind if touching <code>placeBuilding</code>.</li>
+        <li><strong>Do NOT break <code>PIXEL_WORLD</code>:</strong> Never tie FBO pixel density to <code>vw / cam.zoom</code>; keep <code>PIXEL_WORLD = 1.0</code> world-grid-snapped.</li>
+        <li><strong>Avoid Low-Power softlocks:</strong> Always allow <code>hq</code> construction/harvesters, <code>generator</code> building, and <code>depot</code> resource dropoff to operate regardless of power deficit.</li>
+        <li><strong>Keep <code>showcase.html</code> in sync manually:</strong> It has inline copies of <code>MeshBuilder</code>, shaders, and unit meshes; editing <code>js/*.js</code> alone does not update <code>showcase.html</code>.</li>
+        <li><strong>Never overwrite active SVG animations every 90ms:</strong> Update text/widths in-place or gate <code>.innerHTML</code> behind signature equality in <code>syncHud()</code>.</li>
+        <li><strong>Verification on Termux:</strong> Node/headless browsers are absent in default Termux; validate edited HTML/CSS/JS syntax structure/balances via Python before committing and pushing to <code>abdi787/iron-front-rts</code>.</li>
+      </ol>
+    </div>
+  </section>
+</main>
+<script>
+  document.getElementById('copyBriefBtn').addEventListener('click', async () => {
+    const txt = document.getElementById('agentBriefPre').textContent;
+    const btn = document.getElementById('copyBriefBtn');
+    try {
+      await navigator.clipboard.writeText(txt);
+      btn.textContent = 'Copied Brief!';
+      setTimeout(() => { btn.textContent = 'Copy AI Agent Brief'; }, 1600);
+    } catch {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(document.getElementById('agentBriefPre'));
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+</script>
+</body>
+</html>
