@@ -101,15 +101,18 @@
       activeUnitOrder = FACTION_UNITS[faction];
       for (const kind of activeUnitOrder) {
         const s = UNIT_SPECS[kind];
-        const btn = document.createElement('button');
+        const btn = document.createElement('div');
         btn.className = 'cameo-card hidden';
-        btn.title = `${s.name} — ${s.role}`;
+        btn.setAttribute('role', 'button');
+        btn.setAttribute('tabindex', '0');
+        btn.title = `${s.name} — ${s.role} (ПКМ: отмена)`;
         const tag = s.requiresTech ? '<span class="cameo-tag tech-req">СВЯЗЬ</span>' : '';
         btn.innerHTML = `
           <div class="cameo-viewport">
             <img class="cameo-img" src="${portraits.units[kind]}" alt="${s.name}" />
             <span class="cameo-hk">${s.hotkey}</span>
             ${tag}
+            <button type="button" class="cameo-cancel" title="Отменить 1 из очереди (ПКМ)" aria-label="Отменить ${s.name}">−</button>
             <span class="cameo-queue"></span>
             <div class="cameo-shutter" style="height:0%"></div>
           </div>
@@ -119,15 +122,34 @@
             <span class="cameo-cost">${s.cost}</span>
           </div>
         `;
-        btn.addEventListener('click', () => {
+        const cancelBtn = btn.querySelector('.cameo-cancel');
+        cancelBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+        cancelBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          sound.unlock();
+          const prod = getSelectedProducer();
+          if (!prod || prod.kind !== s.requiresBuilding) return;
+          sim.cancelUnit(sim.playerFaction, kind, prod.id);
+        });
+        btn.addEventListener('click', (e) => {
+          if (e.target.closest('.cameo-cancel') || btn.classList.contains('is-disabled')) return;
           sound.unlock();
           const prod = getSelectedProducer();
           if (!prod || prod.kind !== s.requiresBuilding) return;
           sim.queueUnit(sim.playerFaction, kind, prod.id);
         });
+        btn.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          if (e.pointerType === 'touch') return;
+          sound.unlock();
+          const prod = getSelectedProducer();
+          if (!prod || prod.kind !== s.requiresBuilding) return;
+          sim.cancelUnit(sim.playerFaction, kind, prod.id, e.shiftKey);
+        });
         unitDock.appendChild(btn);
         unitBtns[kind] = {
           btn,
+          cancelBtn,
           shutter: btn.querySelector('.cameo-shutter'),
           hbar: btn.querySelector('.cameo-hbar'),
           hfill: btn.querySelector('.cameo-hbar-fill'),
@@ -718,15 +740,17 @@
         const s = UNIT_SPECS[kind];
         const entry = unitBtns[kind];
         if (!entry) continue;
-        const { btn, shutter, hbar, hfill, queueEl } = entry;
+        const { btn, cancelBtn, shutter, hbar, hfill, queueEl } = entry;
         const showCard = !!selProd && s.requiresBuilding === selProd.kind;
         btn.classList.toggle('hidden', !showCard);
         if (!showCard) continue;
 
         const prodReady = selProd.buildProgress >= 1;
         const techOk = !s.requiresTech || hasTech;
-        btn.disabled = !prodReady || !techOk || pe.supplies < s.cost;
+        const canQueue = prodReady && techOk && pe.supplies >= s.cost;
+        btn.classList.toggle('is-disabled', !canQueue);
         btn.classList.toggle('locked', !prodReady || !techOk);
+        btn.setAttribute('aria-disabled', String(!canQueue));
 
         let qCount = 0;
         let firstItem = null;
@@ -740,6 +764,8 @@
         const paused = !!(selProd.buildProgress >= 1 && !sim.isBuildingPowered(selProd));
         queueEl.textContent = qCount > 1 ? `×${qCount}` : qCount === 1 ? '1' : '';
         queueEl.classList.toggle('on', qCount > 0);
+        btn.classList.toggle('has-queue', qCount > 0);
+        cancelBtn.disabled = qCount === 0;
         btn.classList.toggle('active', !!firstItem);
         shutter.style.height = `${pct}%`;
         hbar.classList.toggle('on', !!firstItem);

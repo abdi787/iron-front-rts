@@ -613,6 +613,45 @@
       return true;
     }
 
+    cancelUnit(faction, kind, buildingId = null, cancelAll = false) {
+      const spec = UNIT_SPECS[kind];
+      if (!spec || spec.faction !== faction) return false;
+
+      const producers = this.buildings.filter(
+        (b) => b.faction === faction && b.kind === spec.requiresBuilding && b.koTimer <= 0 &&
+          (buildingId === null || b.id === buildingId) &&
+          b.queue.some((q) => q.kind === kind)
+      );
+      if (producers.length === 0) return false;
+
+      const chosen = producers[0];
+      let removed = 0;
+      for (let i = chosen.queue.length - 1; i >= 0; i--) {
+        if (chosen.queue[i].kind === kind) {
+          chosen.queue.splice(i, 1);
+          removed++;
+          if (!cancelAll) break;
+        }
+      }
+      if (removed === 0) return false;
+
+      const refund = removed * spec.cost;
+      this.economies[faction].supplies += refund;
+
+      if (chosen.queue.length === 0) {
+        chosen.repeatKind = null;
+        chosen.repeatQueue = false;
+      } else if (chosen.repeatQueue && chosen.repeatKind === kind && !chosen.queue.some((q) => q.kind === kind)) {
+        chosen.repeatKind = chosen.queue[0].kind;
+      }
+
+      if (faction === this.playerFaction) {
+        this.effects && this.effects.spawnText(chosen.x, chosen.y - 26, `+${refund}`, '#FBBF24');
+        this.sound && this.sound.playClick();
+      }
+      return true;
+    }
+
     selectInBox(x0, y0, x1, y1, additive = false, clickTol = 12) {
       const pf = this.playerFaction;
       const minX = Math.min(x0, x1) - clickTol;

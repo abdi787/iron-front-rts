@@ -691,16 +691,28 @@ html, body {
   gap: 2px;
   transition: transform 0.06s, border-color 0.1s;
 }
-.cameo-card:hover:not(:disabled) {
+.cameo-card:hover:not(:disabled):not(.is-disabled) {
   border-color: var(--brass);
   background: linear-gradient(180deg, #62584a 0%, #413930 60%, #2b251f 100%);
 }
-.cameo-card:active:not(:disabled) { transform: translateY(1px); }
+.cameo-card:active:not(:disabled):not(.is-disabled) { transform: translateY(1px); }
 .cameo-card.active {
   border-color: var(--brass);
   box-shadow: inset 0 0 8px var(--fac-glow), 0 0 0 1px var(--brass);
 }
-.cameo-card.locked, .cameo-card:disabled { opacity: 0.44; cursor: not-allowed; filter: grayscale(0.45); }
+.cameo-card.locked:not(.has-queue), .cameo-card:disabled { opacity: 0.44; cursor: not-allowed; filter: grayscale(0.45); }
+.cameo-card.is-disabled { cursor: not-allowed; }
+.cameo-card.is-disabled .cameo-img,
+.cameo-card.is-disabled .cameo-foot,
+.cameo-card.is-disabled .cameo-hk,
+.cameo-card.is-disabled .cameo-tag,
+.cameo-card.locked.has-queue .cameo-img,
+.cameo-card.locked.has-queue .cameo-foot,
+.cameo-card.locked.has-queue .cameo-hk,
+.cameo-card.locked.has-queue .cameo-tag {
+  opacity: 0.44;
+  filter: grayscale(0.45);
+}
 
 .cameo-viewport {
   position: relative;
@@ -758,10 +770,51 @@ html, body {
 .cameo-tag.pwr-pos { color: #86efac; }
 .cameo-tag.tech-req { color: #7dd3fc; }
 
+.cameo-cancel {
+  appearance: none;
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  z-index: 4;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  border-radius: 2px;
+  border: 1px solid #120d0c;
+  background: linear-gradient(180deg, #b8362e 0%, #7d1d17 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 210, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.85);
+  color: #fff3e6;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.cameo-cancel::after {
+  content: '';
+  position: absolute;
+  inset: -2px -2px -4px -4px;
+}
+.cameo-cancel:hover {
+  background: linear-gradient(180deg, #d9433a 0%, #99241d 100%);
+  border-color: var(--brass);
+}
+.cameo-cancel:active { transform: translateY(1px); }
+.cameo-card.has-queue .cameo-cancel { display: flex; }
+.cameo-card.has-queue .cameo-tag.tech-req { display: none; }
+
 .cameo-queue {
   position: absolute;
   bottom: 2px;
   right: 2px;
+  z-index: 2;
   font-size: 9px;
   font-weight: 900;
   color: #14110d;
@@ -956,4 +1009,12 @@ html, body {
   .cameo-card { width: 66px; }
   .cameo-viewport { height: 42px; }
   .cameo-img { width: 58px; height: 46px; }
+}
+
+@media (max-width: 580px), (pointer: coarse) {
+  .cameo-cancel {
+    width: 25px;
+    height: 22px;
+    font-size: 15px;
+  }
 }
