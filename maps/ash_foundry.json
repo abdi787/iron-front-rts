@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "ash-foundry",
+  "code": "ПРОМ-01",
+  "name": "Пепельный завод",
+  "author": "IRON FRONT",
+  "description": "Крупная промышленная пустошь для затяжных танковых сражений: пять вышек, бетонные плацдармы и обильные запасы.",
+  "size": { "w": 2800, "h": 1800 },
+  "biome": "ashland",
+  "seed": 3107,
+  "symmetry": "point",
+  "autoMirror": true,
+  "spawns": [
+    {
+      "slot": "player",
+      "x": 380,
+      "y": 1420,
+      "facing": 0,
+      "pad": { "x": 420, "y": 1390, "w": 400, "h": 288 }
+    }
+  ],
+  "pads": [
+    { "x": 1400, "y": 900, "w": 320, "h": 240 },
+    { "x": 960, "y": 1240, "w": 224, "h": 176 }
+  ],
+  "roads": [
+    {
+      "width": 66,
+      "smooth": true,
+      "points": [
+        [380, 1420],
+        [960, 1240],
+        [1400, 900],
+        [1840, 560],
+        [2420, 380]
+      ]
+    },
+    {
+      "width": 46,
+      "smooth": true,
+      "points": [
+        [380, 1420],
+        [520, 880],
+        [880, 560],
+        [1400, 320],
+        [2420, 380]
+      ]
+    }
+  ],
+  "supplyClusters": [
+    { "x": 270, "y": 1060, "count": 6, "amount": 950, "pattern": "standard" },
+    { "x": 880, "y": 1520, "count": 6, "amount": 1000, "pattern": "line" },
+    { "x": 520, "y": 460, "count": 5, "amount": 1150, "pattern": "ring" },
+    { "x": 1400, "y": 900, "count": 4, "amount": 1250, "pattern": "ring" }
+  ],
+  "supplyNodes": [],
+  "capturePoints": [
+    { "x": 1400, "y": 900, "radius": 80, "rate": 12 },
+    { "x": 880, "y": 640, "radius": 74, "rate": 10 },
+    { "x": 1340, "y": 290, "radius": 74, "rate": 10 }
+  ],
+  "obstacles": [
+    { "kind": "rock", "x": 1120, "y": 920, "radius": 34, "variant": 0 },
+    { "kind": "rock", "x": 1170, "y": 970, "radius": 28, "variant": 2 },
+    { "kind": "rock", "x": 1080, "y": 500, "radius": 32, "variant": 1 },
+    { "kind": "rock", "x": 1140, "y": 530, "radius": 26, "variant": 0 },
+    { "kind": "rock", "x": 660, "y": 960, "radius": 30, "variant": 2 },
+    { "kind": "rock", "x": 710, "y": 1000, "radius": 25, "variant": 1 },
+    { "kind": "rock", "x": 1360, "y": 570, "radius": 30, "variant": 0 },
+    { "kind": "rock", "x": 1420, "y": 540, "radius": 24, "variant": 2 },
+    { "kind": "rock", "x": 500, "y": 720, "radius": 26, "variant": 1 }
+  ]
+}

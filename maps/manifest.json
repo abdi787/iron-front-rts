@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "maps": [
+    "sector_04.json",
+    "frostline_pass.json",
+    "dune_citadel.json",
+    "ash_foundry.json",
+    "marsh_delta.json"
+  ]
+}

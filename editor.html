@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IRON FRONT // Map Maker — Конструктор карт</title>
+  <link rel="stylesheet" href="editor.css?v=20261128a" />
+</head>
+<body>
+  <div class="ed-shell">
+    <!-- Top Riveted Command Bar -->
+    <header class="ed-topbar">
+      <div class="ed-brand">
+        <a href="index.html" class="ed-btn" title="Вернуться в игру">← В игру</a>
+        <div class="ed-title-tag">
+          <span class="ed-badge">MAP MAKER</span>
+          <input type="text" id="mapNameTop" class="ed-name-input" maxlength="64" aria-label="Название карты" placeholder="Название карты" />
+        </div>
+      </div>
+
+      <div class="ed-toolbar-mid">
+        <div class="ed-btn-group" role="group" aria-label="История">
+          <button type="button" id="undoBtn" class="ed-btn" title="Отменить (Ctrl+Z)" disabled>↶</button>
+          <button type="button" id="redoBtn" class="ed-btn" title="Повторить (Ctrl+Y)" disabled>↷</button>
+        </div>
+
+        <div class="ed-btn-group" role="group" aria-label="Вид и сетка">
+          <button type="button" id="gridToggleBtn" class="ed-btn active" title="Привязка к сетке 20u (G)">Сетка</button>
+          <button type="button" id="overlayToggleBtn" class="ed-btn active" title="Показать радиус базы 380u и габариты (O)">Зоны</button>
+          <button type="button" id="fitViewBtn" class="ed-btn" title="Вписать карту в экран (F)">Вписать</button>
+        </div>
+
+        <div class="ed-sym-group" title="Живое зеркалирование при рисовании">
+          <span class="ed-mini-lbl">ЗЕРКАЛО:</span>
+          <div class="ed-seg" id="symSeg">
+            <button type="button" data-sym="none">Нет</button>
+            <button type="button" data-sym="point" class="active">180°</button>
+            <button type="button" data-sym="x">X</button>
+            <button type="button" data-sym="y">Y</button>
+          </div>
+          <button type="button" id="bakeSymBtn" class="ed-btn" title="Отзеркалить половину игрока на сторону врага">Отзеркалить</button>
+        </div>
+      </div>
+
+      <div class="ed-toolbar-right">
+        <select id="loadMapSelect" class="ed-select" aria-label="Загрузить карту"></select>
+        <button type="button" id="newMapBtn" class="ed-btn" title="Создать чистую карту">Новая</button>
+        <button type="button" id="saveCustomBtn" class="ed-btn" title="Сохранить в библиотеку браузера (Ctrl+S)">Сохранить</button>
+        <button type="button" id="openJsonBtn" class="ed-btn" title="Импорт / Экспорт JSON для AI и Git">JSON</button>
+        <button type="button" id="testPlayBtn" class="ed-btn brass" title="Запустить эту карту в игре">Тест-бой ▶</button>
+      </div>
+    </header>
+
+    <!-- Main Workspace: Left Tools | Center WYSIWYG Canvas | Right Inspector -->
+    <div class="ed-body">
+      <!-- Left Tool Palette -->
+      <aside class="ed-tools" aria-label="Инструменты карты">
+        <div class="ed-sec-head">ИНСТРУМЕНТЫ</div>
+        <div class="ed-tool-list" id="toolList">
+          <button type="button" class="ed-tool active" data-tool="select">
+            <span class="ed-tool-ico">✥</span>
+            <span class="ed-tool-txt"><strong>Выбор</strong><small>Перемещение / правка</small></span>
+            <kbd>V</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="spawn_player">
+            <span class="ed-tool-ico red">⚑</span>
+            <span class="ed-tool-txt"><strong>HQ Игрока</strong><small>Стартовая база</small></span>
+            <kbd>1</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="spawn_enemy">
+            <span class="ed-tool-ico green">⚑</span>
+            <span class="ed-tool-txt"><strong>HQ Врага</strong><small>База ИИ</small></span>
+            <kbd>2</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="supply">
+            <span class="ed-tool-ico brass">■</span>
+            <span class="ed-tool-txt"><strong>Припасы</strong><small>Кластер паллет</small></span>
+            <kbd>3</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="outpost">
+            <span class="ed-tool-ico amber">▲</span>
+            <span class="ed-tool-txt"><strong>Нефтевышка</strong><small>Контрольная точка</small></span>
+            <kbd>4</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="rock">
+            <span class="ed-tool-ico">◆</span>
+            <span class="ed-tool-txt"><strong>Скалы</strong><small>Кисть препятствий</small></span>
+            <kbd>5</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="road">
+            <span class="ed-tool-ico">═</span>
+            <span class="ed-tool-txt"><strong>Дорога</strong><small>Линия по точкам</small></span>
+            <kbd>6</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="pad">
+            <span class="ed-tool-ico">▦</span>
+            <span class="ed-tool-txt"><strong>Площадка</strong><small>Бетонный плац</small></span>
+            <kbd>7</kbd>
+          </button>
+          <button type="button" class="ed-tool" data-tool="erase">
+            <span class="ed-tool-ico danger">✕</span>
+            <span class="ed-tool-txt"><strong>Ластик</strong><small>Удаление объектов</small></span>
+            <kbd>E</kbd>
+          </button>
+        </div>
+
+        <!-- Contextual Brush / Tool Settings -->
+        <div class="ed-sec-head" style="margin-top:8px;">ПАРАМЕТРЫ КИСТИ</div>
+        <div class="ed-brush-box" id="brushBox"></div>
+
+        <div class="ed-hints">
+          <div><kbd>ПКМ</kbd> / <kbd>WASD</kbd> — камера</div>
+          <div><kbd>Колесо</kbd> — масштаб</div>
+          <div><kbd>R</kbd> — поворот HQ</div>
+          <div><kbd>Del</kbd> — удалить выделенное</div>
+        </div>
+      </aside>
+
+      <!-- Center WYSIWYG Canvas Viewport -->
+      <main class="ed-stage">
+        <canvas id="editorCanvas" class="ed-canvas"></canvas>
+
+        <!-- Road Drawing Banner -->
+        <div id="roadBanner" class="ed-float-banner hidden">
+          <span id="roadBannerText">Рисование дороги: кликайте точки на карте</span>
+          <button type="button" id="finishRoadBtn" class="ed-btn brass small">Завершить (Enter)</button>
+          <button type="button" id="cancelRoadBtn" class="ed-btn small">Отмена (Esc)</button>
+        </div>
+
+        <!-- Toast Feedback -->
+        <div id="toastBanner" class="ed-toast hidden" role="status" aria-live="polite"></div>
+
+        <!-- Corner Live Mini-Radar -->
+        <div class="ed-minimap-box">
+          <div class="ed-minimap-head">
+            <span id="edMinimapLabel">ОБЗОР</span>
+            <span id="edZoomReadout">100%</span>
+          </div>
+          <canvas id="edMinimapCanvas" width="168" height="112"></canvas>
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <footer class="ed-statusbar">
+          <span id="statusCoords">X: 0 · Y: 0</span>
+          <span id="statusToolHint">Выберите объект или перетащите его мышью</span>
+          <span id="statusSummary">2400×1600 · Степь</span>
+        </footer>
+      </main>
+
+      <!-- Right Inspector & Validator Panel -->
+      <aside class="ed-inspector" aria-label="Свойства карты и валидация">
+        <!-- Selection Inspector (appears when an object is selected) -->
+        <section class="ed-panel hidden" id="selectionPanel">
+          <div class="ed-panel-head">
+            <span id="selTitle">ВЫБРАННЫЙ ОБЪЕКТ</span>
+            <button type="button" id="deleteSelBtn" class="ed-btn danger small">Удалить</button>
+          </div>
+          <div id="selBody" class="ed-form"></div>
+        </section>
+
+        <!-- Validator & Balance Panel -->
+        <section class="ed-panel" id="validatorPanel">
+          <div class="ed-panel-head">
+            <span>ВАЛИДАТОР И БАЛАНС</span>
+            <span id="valBadge" class="ed-val-badge ok">OK</span>
+          </div>
+          <div id="valStats" class="ed-stat-grid"></div>
+          <div id="valIssues" class="ed-issues"></div>
+        </section>
+
+        <!-- Map Settings Panel -->
+        <section class="ed-panel">
+          <div class="ed-panel-head"><span>ПАРАМЕТРЫ СЕКТОРА</span></div>
+          <div class="ed-form">
+            <div class="ed-row-2">
+              <label class="ed-field">
+                <span>Код радара</span>
+                <input type="text" id="mapCodeInput" maxlength="14" placeholder="СЕК-09" />
+              </label>
+              <label class="ed-field">
+                <span>ID карты</span>
+                <input type="text" id="mapIdInput" maxlength="40" placeholder="my-sector" />
+              </label>
+            </div>
+
+            <label class="ed-field">
+              <span>Описание</span>
+              <textarea id="mapDescInput" rows="2" maxlength="220" placeholder="Краткое тактическое описание сектора..."></textarea>
+            </label>
+
+            <div class="ed-field">
+              <span>Биом</span>
+              <div class="ed-biome-grid" id="biomeGrid"></div>
+            </div>
+
+            <div class="ed-field">
+              <span>Размер поля</span>
+              <div class="ed-size-presets" id="sizePresets"></div>
+              <div class="ed-row-2" style="margin-top:4px;">
+                <label class="ed-field inline">
+                  <span>W</span>
+                  <input type="number" id="sizeWInput" min="1200" max="4800" step="100" />
+                </label>
+                <label class="ed-field inline">
+                  <span>H</span>
+                  <input type="number" id="sizeHInput" min="1000" max="3600" step="100" />
+                </label>
+              </div>
+            </div>
+
+            <div class="ed-row-seed">
+              <label class="ed-field">
+                <span>Seed рельефа</span>
+                <input type="number" id="seedInput" min="1" max="999999" step="1" />
+              </label>
+              <button type="button" id="randSeedBtn" class="ed-btn" title="Случайный шум земли">🎲 Шум</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Saved Custom Maps -->
+        <section class="ed-panel">
+          <div class="ed-panel-head">
+            <span>МОИ КАРТЫ</span>
+            <span id="customCountBadge" class="ed-muted-tag">0</span>
+          </div>
+          <div id="customMapsList" class="ed-custom-list"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Native Modal Dialog for JSON Import/Export & AI Agent Exchange -->
+  <dialog id="jsonDialog" class="ed-dialog" closedby="any" aria-labelledby="jsonDialogTitle">
+    <div class="ed-dialog-head">
+      <div>
+        <h1 id="jsonDialogTitle">JSON-карта (Человек ↔ AI-агент)</h1>
+        <p class="ed-dialog-sub">Совместимо со схемой <code>schemaVersion: 1</code>, валидатором <code>scripts/validate_maps.mjs</code> и папкой <code>maps/</code>.</p>
+      </div>
+      <form method="dialog">
+        <button type="submit" value="close" class="ed-btn" aria-label="Закрыть">✕</button>
+      </form>
+    </div>
+
+    <div class="ed-dialog-bar">
+      <button type="button" id="jsonCopyBtn" class="ed-btn brass">Копировать JSON</button>
+      <button type="button" id="jsonDownloadBtn" class="ed-btn">Скачать .json</button>
+      <button type="button" id="jsonUploadBtn" class="ed-btn">Загрузить .json</button>
+      <input type="file" id="jsonFileInput" accept=".json,application/json" hidden />
+      <label class="ed-check-inline" title="Оставить только одну половину карты с флагом autoMirror: true (экономит токены AI-агента)">
+        <input type="checkbox" id="jsonCompactMirrorCheck" />
+        <span>Компактный режим с autoMirror</span>
+      </label>
+    </div>
+
+    <textarea id="jsonTextarea" class="ed-json-area" spellcheck="false" autofocus aria-label="JSON код карты"></textarea>
+    <div id="jsonFeedback" class="ed-json-feedback" role="status" aria-live="polite"></div>
+
+    <div class="ed-dialog-foot">
+      <button type="button" id="jsonValidateBtn" class="ed-btn">Проверить валидатором</button>
+      <button type="button" id="jsonApplyBtn" class="ed-btn brass">Применить в редактор</button>
+      <form method="dialog">
+        <button type="submit" value="close" class="ed-btn">Закрыть</button>
+      </form>
+    </div>
+  </dialog>
+
+  <script src="js/maps.js?v=20261128a"></script>
+  <script src="js/maps_builtin.js?v=20261128a"></script>
+  <script src="js/mesh_core.js?v=20261128a"></script>
+  <script src="js/units_meshes.js?v=20261128a"></script>
+  <script src="js/buildings_meshes.js?v=20261128a"></script>
+  <script src="js/sim.js?v=20261128b"></script>
+  <script src="js/renderer3d.js?v=20261128b"></script>
+  <script src="js/cursors.js?v=20261128c"></script>
+  <script src="js/particles.js?v=20261128b"></script>
+  <script src="js/renderer.js?v=20261128b"></script>
+  <script src="js/editor.js?v=20261128b"></script>
+</body>
+</html>

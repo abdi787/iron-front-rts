@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "marsh-delta",
+  "code": "ТОПЬ-03",
+  "name": "Болотный плацдарм",
+  "author": "IRON FRONT",
+  "description": "Компактная арена для быстрых динамичных стычек: короткое плечо атаки, три вышки и напряжённая борьба за центр.",
+  "size": { "w": 2000, "h": 1400 },
+  "biome": "marsh",
+  "seed": 5510,
+  "symmetry": "point",
+  "autoMirror": true,
+  "spawns": [
+    {
+      "slot": "player",
+      "x": 310,
+      "y": 1090,
+      "facing": 0,
+      "pad": { "x": 345, "y": 1075, "w": 336, "h": 240 }
+    }
+  ],
+  "pads": [],
+  "roads": [
+    {
+      "width": 52,
+      "smooth": true,
+      "points": [
+        [310, 1090],
+        [720, 880],
+        [1000, 700],
+        [1280, 520],
+        [1690, 310]
+      ]
+    }
+  ],
+  "supplyClusters": [
+    { "x": 230, "y": 770, "count": 5, "amount": 900, "pattern": "standard" },
+    { "x": 960, "y": 1160, "count": 5, "amount": 1000, "pattern": "standard" }
+  ],
+  "supplyNodes": [],
+  "capturePoints": [
+    { "x": 660, "y": 480, "radius": 72, "rate": 10 },
+    { "x": 1000, "y": 700, "radius": 74, "rate": 12 }
+  ],
+  "obstacles": [
+    { "kind": "rock", "x": 790, "y": 770, "radius": 30, "variant": 0 },
+    { "kind": "rock", "x": 835, "y": 815, "radius": 24, "variant": 2 },
+    { "kind": "rock", "x": 610, "y": 740, "radius": 26, "variant": 1 },
+    { "kind": "rock", "x": 970, "y": 320, "radius": 28, "variant": 0 },
+    { "kind": "rock", "x": 1020, "y": 350, "radius": 22, "variant": 1 }
+  ]
+}

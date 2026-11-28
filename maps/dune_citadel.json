@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "dune-citadel",
+  "code": "ЮГ-07",
+  "name": "Дюнная цитадель",
+  "author": "IRON FRONT",
+  "description": "Выжженная котловина с укреплённым центральным плацем, окружённым грядами песчаника и богатыми флангами.",
+  "size": { "w": 2400, "h": 1800 },
+  "biome": "desert",
+  "seed": 8842,
+  "symmetry": "point",
+  "autoMirror": true,
+  "spawns": [
+    {
+      "slot": "player",
+      "x": 360,
+      "y": 380,
+      "facing": 0,
+      "pad": { "x": 400, "y": 400, "w": 368, "h": 268 }
+    }
+  ],
+  "pads": [
+    { "x": 1200, "y": 900, "w": 320, "h": 240 }
+  ],
+  "roads": [
+    {
+      "width": 58,
+      "smooth": true,
+      "points": [
+        [360, 380],
+        [780, 620],
+        [1200, 900],
+        [1620, 1180],
+        [2040, 1420]
+      ]
+    },
+    {
+      "width": 44,
+      "smooth": true,
+      "points": [
+        [360, 380],
+        [440, 1080],
+        [680, 1420],
+        [1340, 1520],
+        [2040, 1420]
+      ]
+    }
+  ],
+  "supplyClusters": [
+    { "x": 270, "y": 720, "count": 6, "amount": 900, "pattern": "standard" },
+    { "x": 1160, "y": 290, "count": 5, "amount": 1000, "pattern": "ring" },
+    { "x": 1030, "y": 820, "count": 3, "amount": 1150, "pattern": "standard" }
+  ],
+  "supplyNodes": [],
+  "capturePoints": [
+    { "x": 1200, "y": 900, "radius": 80, "rate": 14 },
+    { "x": 660, "y": 1380, "radius": 74, "rate": 10 }
+  ],
+  "obstacles": [
+    { "kind": "rock", "x": 920, "y": 600, "radius": 34, "variant": 0 },
+    { "kind": "rock", "x": 990, "y": 560, "radius": 28, "variant": 1 },
+    { "kind": "rock", "x": 870, "y": 670, "radius": 26, "variant": 2 },
+    { "kind": "rock", "x": 760, "y": 1040, "radius": 32, "variant": 1 },
+    { "kind": "rock", "x": 820, "y": 1090, "radius": 26, "variant": 0 },
+    { "kind": "rock", "x": 560, "y": 880, "radius": 28, "variant": 2 },
+    { "kind": "rock", "x": 1450, "y": 520, "radius": 30, "variant": 0 },
+    { "kind": "rock", "x": 1520, "y": 560, "radius": 25, "variant": 2 }
+  ]
+}

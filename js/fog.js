@@ -9,13 +9,25 @@
 
   class FogOfWar {
     constructor(worldW, worldH) {
+      this.canvas = document.createElement('canvas');
+      this.cols = 0;
+      this.rows = 0;
+      this.grid = null;
+      this.resize(worldW, worldH);
+    }
+
+    resize(worldW, worldH) {
       this.worldW = worldW;
       this.worldH = worldH;
-      this.cols = Math.ceil(worldW / FOG_TILE);
-      this.rows = Math.ceil(worldH / FOG_TILE);
+      const cols = Math.max(1, Math.ceil(worldW / FOG_TILE));
+      const rows = Math.max(1, Math.ceil(worldH / FOG_TILE));
+      if (this.cols === cols && this.rows === rows && this.grid) {
+        this.reset();
+        return;
+      }
+      this.cols = cols;
+      this.rows = rows;
       this.grid = new Uint8Array(this.cols * this.rows);
-
-      this.canvas = document.createElement('canvas');
       this.canvas.width = this.cols;
       this.canvas.height = this.rows;
       this.ctx = this.canvas.getContext('2d', { alpha: true });

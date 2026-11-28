@@ -17,11 +17,20 @@
 
     const renderer3d = new FL.Pixel3DRenderer();
     const portraits = renderer3d.bakeAllPortraits();
+    const cursors = FL.CursorSystem ? new FL.CursorSystem(renderer3d, { targetEl: canvas, faction: 'red' }) : null;
     const sound = new FL.SoundEngine();
     const effects = new FL.EffectsPool();
-    const fog = new FL.FogOfWar(WORLD_WIDTH, WORLD_HEIGHT);
-    const sim = new FL.RtsSimulation({ effects, sound, fog });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const requestedMapId = urlParams.get('map');
+    const autoStartRequested = urlParams.get('autostart') === '1';
+
+    let selectedMap = (requestedMapId && FL.MAPS.getMapById(requestedMapId)) || FL.MAPS.getDefaultMap();
+
+    const fog = new FL.FogOfWar(selectedMap.size.w, selectedMap.size.h);
+    const sim = new FL.RtsSimulation({ effects, sound, fog, map: selectedMap });
     const renderer = new FL.GameRenderer(renderer3d);
+    renderer.ensureTerrain(sim.currentMap, true);
 
     // Populate flagship unit cameos on the Title Screen Faction Cards!
     const fillCardPreview = (elId, keys) => {
@@ -31,14 +40,16 @@
     fillCardPreview('redCardPreview', ['red_buggy', 'red_flame_tank', 'red_mortar', 'red_orb_disruptor']);
     fillCardPreview('greenCardPreview', ['green_humvee', 'green_missile_truck', 'green_laser_tank', 'green_ion_tank']);
 
-    const cam = { x: 1200, y: 800, zoom: 1.0, vx: 0, vy: 0 };
+    const cam = { x: sim.worldW * 0.5, y: sim.worldH * 0.5, zoom: 1.0, vx: 0, vy: 0 };
     const clampCam = () => {
       const vw = canvas.clientWidth || window.innerWidth;
       const vh = canvas.clientHeight || window.innerHeight;
-      const halfW = Math.min(WORLD_WIDTH * 0.48, vw / (2 * cam.zoom));
-      const halfH = Math.min(WORLD_HEIGHT * 0.48, vh / (2 * cam.zoom));
-      cam.x = Math.max(halfW * 0.4, Math.min(WORLD_WIDTH - halfW * 0.4, cam.x));
-      cam.y = Math.max(halfH * 0.4, Math.min(WORLD_HEIGHT - halfH * 0.4, cam.y));
+      const worldW = sim.worldW || WORLD_WIDTH;
+      const worldH = sim.worldH || WORLD_HEIGHT;
+      const halfW = Math.min(worldW * 0.48, vw / (2 * cam.zoom));
+      const halfH = Math.min(worldH * 0.48, vh / (2 * cam.zoom));
+      cam.x = Math.max(halfW * 0.4, Math.min(worldW - halfW * 0.4, cam.x));
+      cam.y = Math.max(halfH * 0.4, Math.min(worldH - halfH * 0.4, cam.y));
     };
 
     const screenToWorld = (sx, sy) => {
@@ -173,9 +184,8 @@
             <img class="cameo-img" src="${portraits.buildings[faction][kind]}" alt="${s.name}" />
             <span class="cameo-hk">${s.hotkey}</span>
             <span class="cameo-tag ${pwrCls}">${pwrLabel}</span>
-            <div class="cameo-shutter" style="height:0%"></div>
           </div>
-          <div class="cameo-hbar"><div class="cameo-hbar-fill"></div></div>
+          <div class="cameo-hbar" aria-hidden="true"></div>
           <div class="cameo-foot">
             <span class="cameo-name">${s.name}</span>
             <span class="cameo-cost">${s.cost}</span>
@@ -183,24 +193,22 @@
         `;
         btn.addEventListener('click', () => {
           sound.unlock();
+          const lockReason = sim.getBuildingLockReason(sim.playerFaction, kind);
+          if (lockReason) { sim.showAlert(lockReason); return; }
           sim.activePowerMode = null;
           sim.placementMode = sim.placementMode === kind ? null : kind;
           lastHoverWorld = { x: cam.x, y: cam.y };
           sound.playClick();
         });
         buildDock.appendChild(btn);
-        buildBtns[kind] = {
-          btn,
-          shutter: btn.querySelector('.cameo-shutter'),
-          hbar: btn.querySelector('.cameo-hbar'),
-          hfill: btn.querySelector('.cameo-hbar-fill')
-        };
+        buildBtns[kind] = { btn };
       }
     }
 
     function applyFactionTheme(fac) {
       document.body.classList.toggle('fac-red', fac === 'red');
       document.body.classList.toggle('fac-green', fac === 'green');
+      if (cursors) cursors.setFaction(fac);
       const badge = document.getElementById('hudFactionSvg');
       badge.className = `flag-badge ${fac}`;
       badge.innerHTML = EMBLEM_SVG[fac];
@@ -241,11 +249,152 @@
       document.querySelectorAll('#diffGroup button').forEach((x) => x.classList.toggle('active', x === b));
     });
 
+    const mapSelectStrip = document.getElementById('mapSelectStrip');
+    const mapSelectedMeta = document.getElementById('mapSelectedMeta');
+    const mapSelectedDesc = document.getElementById('mapSelectedDesc');
+    const editSelectedMapLink = document.getElementById('editSelectedMapLink');
+    const importMapBtn = document.getElementById('importMapBtn');
+    const importMapInput = document.getElementById('importMapInput');
+
+    function syncMinimapGeometry() {
+      const worldW = sim.worldW || WORLD_WIDTH;
+      const worldH = sim.worldH || WORLD_HEIGHT;
+      const baseW = 178;
+      const h = Math.max(92, Math.min(148, Math.round((baseW * worldH) / worldW)));
+      minimapCanvas.width = baseW;
+      minimapCanvas.height = h;
+      minimapCanvas.style.height = `${h}px`;
+      const secEl = document.getElementById('minimapSector');
+      if (secEl) {
+        const code = (sim.currentMap && sim.currentMap.code) || 'СЕК-04';
+        secEl.textContent = `РАДАР · ${code}`;
+      }
+    }
+
+    function selectTitleMap(mapData, rebuildDemo = true) {
+      if (!mapData) return;
+      selectedMap = mapData;
+      const biome = FL.MAPS.getBiome(mapData.biome);
+      const exp = FL.MAPS.expandMap(mapData);
+      if (mapSelectedMeta) {
+        mapSelectedMeta.textContent = `· ${mapData.name} (${exp.size.w}×${exp.size.h} · ${biome.short})`;
+      }
+      if (mapSelectedDesc) {
+        mapSelectedDesc.textContent = mapData.description || `${biome.name} · Вышек: ${exp.capturePoints.length} · Припасов: ${exp.expandedSupplyNodes.length}`;
+      }
+      if (editSelectedMapLink) {
+        editSelectedMapLink.href = mapData._source === 'draft'
+          ? 'editor.html?map=draft'
+          : `editor.html?map=${encodeURIComponent(mapData.id)}`;
+      }
+      if (mapSelectStrip) {
+        mapSelectStrip.querySelectorAll('.map-card').forEach((btn) => {
+          const isAct = btn.dataset.mapKey === (mapData._source === 'draft' ? '__draft__' : mapData.id);
+          btn.classList.toggle('active', isAct);
+          btn.setAttribute('aria-selected', String(isAct));
+        });
+      }
+      if (rebuildDemo && sim.phase === 'title') {
+        sim.setupDemoBattle(mapData);
+        renderer.ensureTerrain(sim.currentMap, true);
+        cam.x = sim.worldW * 0.5;
+        cam.y = sim.worldH * 0.5;
+        cam.zoom = 1.0;
+        syncMinimapGeometry();
+      }
+    }
+
+    function renderMapSelector() {
+      if (!mapSelectStrip || !FL.MAPS) return;
+      const list = FL.MAPS.getAllMaps();
+      const draft = FL.MAPS.loadDraftMap();
+      if (draft && (requestedMapId === 'draft' || selectedMap._source === 'draft')) {
+        list.unshift(draft);
+      }
+      mapSelectStrip.innerHTML = '';
+      for (const m of list) {
+        const key = m._source === 'draft' ? '__draft__' : m.id;
+        const biome = FL.MAPS.getBiome(m.biome);
+        const exp = FL.MAPS.expandMap(m);
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'map-card';
+        btn.dataset.mapKey = key;
+        btn.setAttribute('role', 'option');
+        const srcBadge = m._source === 'draft'
+          ? '<span class="map-src-pill">ЧЕРНОВИК</span>'
+          : m._source === 'custom'
+            ? '<span class="map-src-pill">СВОЯ</span>'
+            : '';
+        btn.innerHTML = `
+          <div class="map-thumb-wrap">
+            <canvas class="map-thumb" width="108" height="62"></canvas>
+            <span class="map-biome-pill">${biome.short}</span>
+            ${srcBadge}
+          </div>
+          <div class="map-card-name">${m.name}</div>
+          <div class="map-card-sub">${exp.size.w}×${exp.size.h} · ${exp.capturePoints.length} выш.</div>
+        `;
+        const thumb = btn.querySelector('canvas');
+        FL.GameRenderer.renderMapThumbnail(thumb, exp);
+        btn.addEventListener('click', () => {
+          sound.unlock();
+          sound.playClick();
+          selectTitleMap(m, true);
+        });
+        mapSelectStrip.appendChild(btn);
+      }
+      selectTitleMap(selectedMap, false);
+    }
+
+    if (importMapBtn && importMapInput) {
+      importMapBtn.addEventListener('click', () => importMapInput.click());
+      importMapInput.addEventListener('change', async (e) => {
+        const file = e.target.files && e.target.files[0];
+        importMapInput.value = '';
+        if (!file) return;
+        try {
+          const text = await file.text();
+          const parsed = JSON.parse(text);
+          const check = FL.MAPS.validateMap(parsed);
+          if (!check.ok) {
+            const firstErr = check.errors[0]?.message || 'Некорректный формат карты';
+            window.alert(`Ошибка валидации карты:\n${firstErr}`);
+            return;
+          }
+          const saved = FL.MAPS.saveCustomMap(parsed);
+          if (saved) {
+            selectedMap = saved;
+            renderMapSelector();
+            selectTitleMap(saved, true);
+          }
+        } catch (err) {
+          window.alert(`Не удалось прочитать JSON карты: ${err.message}`);
+        }
+      });
+    }
+
+    renderMapSelector();
+    syncMinimapGeometry();
+    FL.MAPS.loadManifestMaps('maps/').then(() => {
+      if (requestedMapId && requestedMapId !== 'draft') {
+        const found = FL.MAPS.getMapById(requestedMapId);
+        if (found) selectedMap = found;
+      } else if (selectedMap && selectedMap._source === 'builtin') {
+        const updated = FL.MAPS.getMapById(selectedMap.id);
+        if (updated) selectedMap = updated;
+      }
+      renderMapSelector();
+      if (sim.phase === 'title') selectTitleMap(selectedMap, true);
+    });
+
     const startGame = () => {
       sound.unlock();
       sound.playBuild();
       dragBox.active = false;
-      sim.startNewGame(selectedFaction, selectedDiff);
+      sim.startNewGame(selectedFaction, selectedDiff, selectedMap);
+      renderer.ensureTerrain(sim.currentMap, true);
+      syncMinimapGeometry();
       applyFactionTheme(sim.playerFaction);
       rebuildUnitDock(sim.playerFaction);
       rebuildBuildDock(sim.playerFaction);
@@ -253,7 +402,12 @@
       lastAutoProdId = null;
       mobileDockTab = 'build';
       syncDockTabs();
-      cam.x = 460; cam.y = 1140;
+      const sp = sim.playerSpawn;
+      const toCx = sim.worldW * 0.5 - sp.x;
+      const toCy = sim.worldH * 0.5 - sp.y;
+      const distC = Math.max(1, Math.hypot(toCx, toCy));
+      cam.x = sp.x + (toCx / distC) * 110;
+      cam.y = sp.y + (toCy / distC) * 110;
       cam.zoom = window.innerWidth < 760 ? 0.85 : 1.0;
       cam.vx = 0; cam.vy = 0;
       clampCam();
@@ -263,6 +417,9 @@
     };
 
     document.getElementById('startGameBtn').addEventListener('click', startGame);
+    if (autoStartRequested) {
+      startGame();
+    }
 
     const toggleFullscreen = () => {
       if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
@@ -376,16 +533,18 @@
       statusModal.classList.add('hidden');
       hudRoot.classList.add('hidden');
       titleScreen.classList.remove('hidden');
-      sim.setupDemoBattle();
-      cam.x = 1200; cam.y = 800; cam.zoom = 1.0;
+      sim.setupDemoBattle(selectedMap);
+      renderer.ensureTerrain(sim.currentMap, true);
+      cam.x = sim.worldW * 0.5; cam.y = sim.worldH * 0.5; cam.zoom = 1.0;
+      renderMapSelector();
     });
 
     const moveCamToMinimap = (e) => {
       const rect = minimapCanvas.getBoundingClientRect();
       const nx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       const ny = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-      cam.x = nx * WORLD_WIDTH;
-      cam.y = ny * WORLD_HEIGHT;
+      cam.x = nx * (sim.worldW || WORLD_WIDTH);
+      cam.y = ny * (sim.worldH || WORLD_HEIGHT);
       clampCam();
     };
     let minimapDrag = false;
@@ -636,6 +795,8 @@
         }
         for (const bk of BUILD_ORDER) {
           if (BUILDING_SPECS[bk].hotkey.toLowerCase() === k) {
+            const lockReason = sim.getBuildingLockReason(sim.playerFaction, bk);
+            if (lockReason) { sim.showAlert(lockReason); continue; }
             sim.activePowerMode = null;
             sim.placementMode = sim.placementMode === bk ? null : bk;
           }
@@ -643,8 +804,8 @@
       }
     });
     window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
-    document.addEventListener('mouseleave', () => { mouseClient.inside = false; });
-    window.addEventListener('blur', () => { mouseClient.inside = false; keys.clear(); });
+    document.addEventListener('mouseleave', () => { mouseClient.inside = false; cursors && cursors.setEdgePan(0, 0); });
+    window.addEventListener('blur', () => { mouseClient.inside = false; keys.clear(); cursors && cursors.setEdgePan(0, 0); });
 
     const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
     let hudTick = 0;
@@ -775,25 +936,19 @@
       const anyUnitBusy = sim.buildings.some((b) => b.faction === pf && b.koTimer <= 0 && b.queue.length > 0);
       document.getElementById('tabUnitsDot').classList.toggle('busy', anyUnitBusy);
 
-      let anyBldBusy = false;
       for (const kind of BUILD_ORDER) {
         const s = BUILDING_SPECS[kind];
         const entry = buildBtns[kind];
         if (!entry) continue;
-        const { btn, shutter, hbar, hfill } = entry;
-        const techOk = !s.requiresTech || hasTech;
-        btn.disabled = !hasHq || !techOk || pe.supplies < s.cost;
-        btn.classList.toggle('locked', !techOk);
-        const constructing = sim.buildings.find((b) => b.faction === pf && b.kind === kind && b.buildProgress < 1 && b.koTimer <= 0);
-        if (constructing) anyBldBusy = true;
-        const pct = constructing ? Math.round(constructing.buildProgress * 100) : 0;
-        btn.classList.toggle('active', sim.placementMode === kind || !!constructing);
-        btn.classList.toggle('need-power', kind === 'generator' && lowPwr && !constructing);
-        shutter.style.height = `${pct}%`;
-        hbar.classList.toggle('on', !!constructing);
-        hfill.style.width = `${pct}%`;
+        const { btn } = entry;
+        const lockReason = sim.getBuildingLockReason(pf, kind);
+        btn.disabled = !hasHq || !!lockReason || pe.supplies < s.cost;
+        btn.classList.toggle('locked', !!lockReason);
+        btn.classList.toggle('active', sim.placementMode === kind);
+        btn.classList.toggle('need-power', kind === 'generator' && lowPwr);
+        btn.title = lockReason ? `${s.name} — ${s.role} (${lockReason})` : `${s.name} — ${s.role}`;
       }
-      document.getElementById('tabBuildDot').classList.toggle('busy', !!sim.placementMode || anyBldBusy);
+      document.getElementById('tabBuildDot').classList.toggle('busy', !!sim.placementMode);
 
       const selUnits = sim.units.filter((u) => u.faction === pf && u.selected && u.koTimer <= 0);
       const selBld = sim.buildings.find((b) => b.faction === pf && b.selected && b.koTimer <= 0);
@@ -883,6 +1038,7 @@
         canvas.height = ch;
       }
 
+      let edgeEx = 0, edgeEy = 0;
       if (sim.phase === 'playing') {
         const panSpd = 650 / cam.zoom;
         let panX = 0, panY = 0;
@@ -905,6 +1061,8 @@
             if (my < edgeY) ey = -(0.35 + 0.65 * (1 - Math.max(0, my) / edgeY));
             else if (my > vh - edgeY) ey = 0.35 + 0.65 * (1 - Math.max(0, vh - my) / edgeY);
           }
+          edgeEx = ex;
+          edgeEy = ey;
           if (ex !== 0 || ey !== 0) {
             const len = Math.hypot(ex, ey);
             if (len > 1) { ex /= len; ey /= len; }
@@ -952,8 +1110,18 @@
           }
         }
       } else if (sim.phase === 'title') {
-        cam.x = 1200 + Math.sin(sim.elapsedTime * 0.14) * 140;
-        cam.y = 800 + Math.cos(sim.elapsedTime * 0.11) * 75;
+        cam.x = sim.worldW * 0.5 + Math.sin(sim.elapsedTime * 0.14) * 140;
+        cam.y = sim.worldH * 0.5 + Math.cos(sim.elapsedTime * 0.11) * 75;
+      }
+
+      if (cursors) {
+        cursors.setEdgePan(edgeEx, edgeEy);
+        if (edgeEx === 0 && edgeEy === 0) {
+          const curState = sim.phase === 'playing' && mouseClient.inside && !mouseClient.overUi
+            ? cursors.resolveGameCursor(sim, lastHoverWorld, { isDraggingBox: mouseDrag && dragBox.active })
+            : 'default';
+          cursors.setCanvasState(curState);
+        }
       }
 
       sim.step(dt);

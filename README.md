@@ -7,9 +7,21 @@
 - **Olive Vanguard** — Хамви, БТР 8×8, Ракета, Циклоп, Ион и базовые подразделения/постройки.
 
 ## Страницы
-- `index.html` — основная игра (выбор фракции, уровня сложности противника и бой).
+- `index.html` — основная игра (выбор фракции, карты/сектора, уровня сложности и бой; поддержка импорта `.json` карт; предпросмотр всех 20 3D→Pixel курсоров: `index.html?cursors=1`).
+- `editor.html` — **Map Maker**: визуальный WYSIWYG-конструктор карт (5 биомов, живое зеркалирование, валидатор баланса и проходимости, тест-бой в 1 клик, экспорт/импорт JSON).
 - `showcase.html` — интерактивный 3D ↔ Pixel Art шоукейс 16 юнитов.
-- `docs.html` — техническая документация и контекст-брифинг для разработчиков и AI-агентов.
+- `docs.html` — техническая документация, спецификация JSON-карт и контекст-брифинг для разработчиков и AI-агентов.
+
+## Карты и валидатор (для людей и AI-агентов)
+Встроенные карты хранятся в `maps/*.json` (реестр — `maps/manifest.json`) в едином декларативном формате `schemaVersion: 1` с поддержкой 5 биомов (`steppe`, `desert`, `tundra`, `ashland`, `marsh`) и авто-симметрии (`autoMirror: true`).
+
+Проверка всех карт (или одного файла) из терминала:
+
+```bash
+node scripts/validate_maps.mjs
+node scripts/validate_maps.mjs maps/my_map.json
+node scripts/validate_maps.mjs --sync-builtin
+```
 
 ## Управление
 - **ЛКМ** — выбор юнита / рамка выделения
@@ -38,18 +50,33 @@ python3 -m http.server 8080
 ```text
 .
 ├── index.html
+├── editor.html
+├── editor.css
 ├── showcase.html
 ├── docs.html
 ├── style.css
+├── maps/
+│   ├── manifest.json
+│   ├── sector_04.json
+│   ├── frostline_pass.json
+│   ├── dune_citadel.json
+│   ├── ash_foundry.json
+│   └── marsh_delta.json
+├── scripts/
+│   └── validate_maps.mjs
 └── js/
+    ├── maps.js
+    ├── maps_builtin.js
     ├── mesh_core.js
     ├── units_meshes.js
     ├── buildings_meshes.js
     ├── sim.js
     ├── renderer3d.js
+    ├── cursors.js
     ├── fog.js
     ├── particles.js
     ├── sound.js
     ├── renderer.js
-    └── main.js
+    ├── main.js
+    └── editor.js
 ```

@@ -1,29 +1,85 @@
 (() => {
   'use strict';
   const FL = (window.FRONTLINE = window.FRONTLINE || {});
-  const { WORLD_WIDTH, WORLD_HEIGHT, UNIT_SPECS, BUILDING_SPECS } = FL.CONSTANTS;
+  const {
+    WORLD_WIDTH, WORLD_HEIGHT, UNIT_SPECS, BUILDING_SPECS,
+    getBuildingClearanceRect, getPropClearanceRect, rectsOverlap
+  } = FL.CONSTANTS;
+
+  function traceRoadPath(ctx, points, scaleX, scaleY, smooth) {
+    if (!points || points.length < 2) return;
+    ctx.beginPath();
+    ctx.moveTo(points[0][0] * scaleX, points[0][1] * scaleY);
+    if (smooth && points.length >= 3) {
+      for (let i = 1; i < points.length - 1; i++) {
+        const x1 = points[i][0] * scaleX;
+        const y1 = points[i][1] * scaleY;
+        const mx = ((points[i][0] + points[i + 1][0]) * 0.5) * scaleX;
+        const my = ((points[i][1] + points[i + 1][1]) * 0.5) * scaleY;
+        ctx.quadraticCurveTo(x1, y1, mx, my);
+      }
+      const last = points[points.length - 1];
+      ctx.lineTo(last[0] * scaleX, last[1] * scaleY);
+    } else {
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i][0] * scaleX, points[i][1] * scaleY);
+      }
+    }
+  }
 
   class GameRenderer {
     constructor(renderer3d) {
       this.renderer3d = renderer3d;
-      this.terrainCanvas = this.bakeTerrain();
+      this.terrainCanvas = null;
+      this._terrainKey = null;
+      this.ensureTerrain(FL.MAPS ? FL.MAPS.getDefaultMap() : null, true);
     }
 
-    bakeTerrain() {
+    getTerrainSignature(mapData) {
+      if (!mapData) return 'default';
+      const w = mapData.size ? mapData.size.w : WORLD_WIDTH;
+      const h = mapData.size ? mapData.size.h : WORLD_HEIGHT;
+      const roadsSig = JSON.stringify(mapData.roads || []);
+      const padsSig = JSON.stringify(mapData.expandedPads || mapData.pads || []);
+      return `${mapData.id || ''}|${w}x${h}|${mapData.biome || 'steppe'}|${mapData.seed || 0}|${roadsSig}|${padsSig}`;
+    }
+
+    ensureTerrain(mapData, force = false) {
+      const expanded = mapData && FL.MAPS && !mapData.expandedPads ? FL.MAPS.expandMap(mapData) : mapData;
+      const sig = this.getTerrainSignature(expanded);
+      if (!force && this.terrainCanvas && this._terrainKey === sig) return;
+      this._terrainKey = sig;
+      this.terrainCanvas = this.bakeTerrain(expanded);
+    }
+
+    bakeTerrain(mapData) {
+      const worldW = (mapData && mapData.size && mapData.size.w) || WORLD_WIDTH;
+      const worldH = (mapData && mapData.size && mapData.size.h) || WORLD_HEIGHT;
+      const biome = FL.MAPS ? FL.MAPS.getBiome(mapData && mapData.biome) : null;
+      const pal = (biome && biome.terrain) || {
+        base: '#896644', hi: '#95724E', lo: '#7A593A',
+        speckDark: '#6D4F33', speckLight: '#A37F58', flora1: '#5F663D', flora2: '#747C4B',
+        roadOuter: '#735335', roadInner: '#7D5B3B',
+        padBorder: '#6B4E34', padA: '#736C60', padB: '#6B6458', padTop: '#857E70', padStripe: '#D4A942',
+        border: '#3B2C1F', voidBg: '#231C16'
+      };
+      const seed = (mapData && Number.isFinite(mapData.seed)) ? mapData.seed : 4201;
+
       const scale = 2;
-      const w = WORLD_WIDTH / scale;
-      const h = WORLD_HEIGHT / scale;
+      const w = Math.ceil(worldW / scale);
+      const h = Math.ceil(worldH / scale);
       const c = document.createElement('canvas');
       c.width = w; c.height = h;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = false;
 
-      // Rich muddy steppe-desert earth matching the dieselpunk concept artwork
-      ctx.fillStyle = '#896644';
+      ctx.fillStyle = pal.base;
       ctx.fillRect(0, 0, w, h);
 
+      const phaseA = ((seed * 131) % 360) * 0.01745;
+      const phaseB = ((seed * 257) % 360) * 0.01745;
       const hash = (x, y) => {
-        let n = Math.imul(x, 374761393) + Math.imul(y, 668265263);
+        let n = Math.imul(x + seed * 17, 374761393) + Math.imul(y - seed * 31, 668265263);
         n = Math.imul(n ^ (n >>> 13), 1274126177);
         return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
       };
@@ -31,65 +87,82 @@
       const tile = 16;
       for (let ty = 0; ty < h; ty += tile) {
         for (let tx = 0; tx < w; tx += tile) {
-          const v = Math.sin(tx * 0.011 + ty * 0.008) * 0.5 + Math.cos(tx * 0.006 - ty * 0.014) * 0.5;
-          if (v > 0.36) { ctx.fillStyle = '#95724E'; ctx.fillRect(tx, ty, tile, tile); }
-          else if (v < -0.34) { ctx.fillStyle = '#7A593A'; ctx.fillRect(tx, ty, tile, tile); }
+          const v = Math.sin(tx * 0.011 + ty * 0.008 + phaseA) * 0.5 + Math.cos(tx * 0.006 - ty * 0.014 + phaseB) * 0.5;
+          if (v > 0.36) { ctx.fillStyle = pal.hi; ctx.fillRect(tx, ty, tile, tile); }
+          else if (v < -0.34) { ctx.fillStyle = pal.lo; ctx.fillRect(tx, ty, tile, tile); }
 
           const r = hash(tx, ty);
-          if (r > 0.85) { ctx.fillStyle = '#6D4F33'; ctx.fillRect(tx + 4, ty + 6, 5, 3); }
-          else if (r < 0.10) { ctx.fillStyle = '#A37F58'; ctx.fillRect(tx + 8, ty + 4, 4, 2); }
-          else if (r > 0.47 && r < 0.50) {
-            ctx.fillStyle = '#5F663D'; ctx.fillRect(tx + 6, ty + 7, 4, 3);
-            ctx.fillStyle = '#747C4B'; ctx.fillRect(tx + 7, ty + 6, 2, 2);
+          if (r > 0.85) { ctx.fillStyle = pal.speckDark; ctx.fillRect(tx + 4, ty + 6, 5, 3); }
+          else if (r < 0.10) { ctx.fillStyle = pal.speckLight; ctx.fillRect(tx + 8, ty + 4, 4, 2); }
+          else if (r > 0.47 && r < 0.505) {
+            ctx.fillStyle = pal.flora1; ctx.fillRect(tx + 6, ty + 7, 4, 3);
+            ctx.fillStyle = pal.flora2; ctx.fillRect(tx + 7, ty + 6, 2, 2);
           }
         }
       }
 
-      // Worn convoy supply road linking SW Base <-> Center <-> NE Base
-      ctx.strokeStyle = '#735335';
-      ctx.lineWidth = 30; ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(180, 620); ctx.quadraticCurveTo(420, 520, 600, 400); ctx.quadraticCurveTo(780, 280, 1020, 180);
-      ctx.stroke();
+      // Parametric convoy roads
+      const roads = (mapData && mapData.roads) || [];
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (const road of roads) {
+        if (!road.points || road.points.length < 2) continue;
+        const outerW = Math.max(8, (road.width || 60) / scale);
+        const innerW = Math.max(4, outerW * 0.47);
+        ctx.strokeStyle = pal.roadOuter;
+        ctx.lineWidth = outerW;
+        traceRoadPath(ctx, road.points, 1 / scale, 1 / scale, road.smooth !== false);
+        ctx.stroke();
 
-      ctx.strokeStyle = '#7D5B3B'; ctx.lineWidth = 14;
-      ctx.beginPath();
-      ctx.moveTo(180, 620); ctx.quadraticCurveTo(420, 520, 600, 400); ctx.quadraticCurveTo(780, 280, 1020, 180);
-      ctx.stroke();
+        ctx.strokeStyle = pal.roadInner;
+        ctx.lineWidth = innerW;
+        traceRoadPath(ctx, road.points, 1 / scale, 1 / scale, road.smooth !== false);
+        ctx.stroke();
+      }
 
-      const drawPad = (cx, cy) => {
-        const pw = 184, ph = 134, x0 = cx - pw / 2, y0 = cy - ph / 2;
-        ctx.fillStyle = '#6B4E34';
+      // Parametric concrete base & staging pads
+      const drawPad = (pad) => {
+        const pw = Math.max(32, Math.round((pad.w || 368) / (scale * 16)) * 16);
+        const ph = Math.max(32, Math.round((pad.h || 268) / (scale * 16)) * 16);
+        const x0 = Math.round(pad.x / scale - pw / 2);
+        const y0 = Math.round(pad.y / scale - ph / 2);
+        ctx.fillStyle = pal.padBorder;
         ctx.fillRect(x0 - 8, y0 - 8, pw + 16, ph + 16);
         for (let py = 0; py < ph; py += 16) {
           for (let px = 0; px < pw; px += 16) {
             if ((px === 0 || px === pw - 16) && (py === 0 || py === ph - 16)) continue;
-            ctx.fillStyle = ((px / 16 + py / 16) % 2 === 0) ? '#736C60' : '#6B6458';
+            ctx.fillStyle = ((px / 16 + py / 16) % 2 === 0) ? pal.padA : pal.padB;
             ctx.fillRect(x0 + px, y0 + py, 15, 15);
-            ctx.fillStyle = '#857E70';
+            ctx.fillStyle = pal.padTop;
             ctx.fillRect(x0 + px, y0 + py, 15, 1);
           }
         }
-        ctx.fillStyle = '#D4A942';
+        ctx.fillStyle = pal.padStripe;
         ctx.fillRect(x0 + 16, y0 + 2, 14, 2);
         ctx.fillRect(x0 + pw - 30, y0 + 2, 14, 2);
       };
-      drawPad(210, 610);
-      drawPad(990, 190);
 
-      ctx.strokeStyle = '#3B2C1F';
+      const pads = (mapData && mapData.expandedPads) || [];
+      for (const pad of pads) drawPad(pad);
+
+      ctx.strokeStyle = pal.border;
       ctx.lineWidth = 6;
       ctx.strokeRect(3, 3, w - 6, h - 6);
       return c;
     }
 
     renderWorld(ctx, vw, vh, sim, effects, cam, dragBox, hoverWorld, longPress) {
+      const worldW = sim.worldW || WORLD_WIDTH;
+      const worldH = sim.worldH || WORLD_HEIGHT;
+      const biome = FL.MAPS ? FL.MAPS.getBiome(sim.currentMap && sim.currentMap.biome) : null;
+      this.ensureTerrain(sim.currentMap);
+
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      ctx.fillStyle = '#231C16';
+      ctx.fillStyle = (biome && biome.terrain && biome.terrain.voidBg) || '#231C16';
       ctx.fillRect(0, 0, vw, vh);
 
-      const shake = sim.cameraTrauma * sim.cameraTrauma * 13;
+      const shake = (sim.cameraTrauma || 0) * (sim.cameraTrauma || 0) * 13;
       const sx = shake > 0.1 ? (Math.random() * 2 - 1) * shake : 0;
       const sy = shake > 0.1 ? (Math.random() * 2 - 1) * shake : 0;
 
@@ -105,9 +178,9 @@
 
       const visMinX = Math.max(0, camLeft);
       const visMinY = Math.max(0, camTop);
-      const visMaxX = Math.min(WORLD_WIDTH, camLeft + vw / z);
-      const visMaxY = Math.min(WORLD_HEIGHT, camTop + vh / z);
-      if (visMaxX > visMinX && visMaxY > visMinY) {
+      const visMaxX = Math.min(worldW, camLeft + vw / z);
+      const visMaxY = Math.min(worldH, camTop + vh / z);
+      if (this.terrainCanvas && visMaxX > visMinX && visMaxY > visMinY) {
         ctx.drawImage(
           this.terrainCanvas,
           visMinX / 2, visMinY / 2, (visMaxX - visMinX) / 2, (visMaxY - visMinY) / 2,
@@ -174,17 +247,22 @@
           ctx.fillRect(b.rallyX - 3, b.rallyY - 3, 6, 6);
         }
       }
+      let placementCheck = null;
+      let ghostRect = null;
       if (sim.placementMode && hoverWorld) {
         const spec = BUILDING_SPECS[sim.placementMode];
-        const ok = sim.canPlaceBuilding(pf, sim.placementMode, hoverWorld.x, hoverWorld.y).ok;
+        placementCheck = sim.canPlaceBuilding(pf, sim.placementMode, hoverWorld.x, hoverWorld.y);
+        ghostRect = getBuildingClearanceRect(sim.placementMode, hoverWorld.x, hoverWorld.y, sim.placementDir);
+        const ok = placementCheck.ok;
+
         ctx.strokeStyle = ok ? 'rgba(132, 204, 22, 0.9)' : 'rgba(239, 68, 68, 0.9)';
         ctx.fillStyle = ok ? 'rgba(132, 204, 22, 0.16)' : 'rgba(239, 68, 68, 0.16)';
         ctx.lineWidth = 2;
-        ctx.fillRect(hoverWorld.x - spec.footprintW * 0.5, hoverWorld.y - spec.footprintH * 0.36, spec.footprintW, spec.footprintH * 0.72);
-        ctx.strokeRect(hoverWorld.x - spec.footprintW * 0.5, hoverWorld.y - spec.footprintH * 0.36, spec.footprintW, spec.footprintH * 0.72);
+        ctx.fillRect(hoverWorld.x - ghostRect.hw, hoverWorld.y - ghostRect.hh, ghostRect.hw * 2, ghostRect.hh * 2);
+        ctx.strokeRect(hoverWorld.x - ghostRect.hw, hoverWorld.y - ghostRect.hh, ghostRect.hw * 2, ghostRect.hh * 2);
         const fRad = sim.getPlacementRad();
-        const fx = hoverWorld.x + Math.cos(fRad) * (spec.footprintW * 0.5 + 8);
-        const fy = hoverWorld.y + Math.sin(fRad) * (spec.footprintH * 0.36 + 8);
+        const fx = hoverWorld.x + Math.cos(fRad) * (ghostRect.hw + 8);
+        const fy = hoverWorld.y + Math.sin(fRad) * (ghostRect.hh + 8);
         ctx.save();
         ctx.translate(fx, fy);
         ctx.rotate(fRad);
@@ -300,6 +378,92 @@
         ctx.beginPath(); ctx.arc(hoverWorld.x, hoverWorld.y, rad, 0, Math.PI * 2); ctx.stroke();
         ctx.setLineDash([]);
       }
+      if (sim.placementMode && hoverWorld && placementCheck && ghostRect) {
+        const ok = placementCheck.ok;
+
+        if (!ok && placementCheck.reason === 'Слишком далеко от базы') {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(132, 204, 22, 0.45)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([8, 6]);
+          for (const b of sim.buildings) {
+            if (b.faction !== pf || b.koTimer > 0) continue;
+            ctx.beginPath();
+            ctx.arc(b.x, b.y, 380, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+
+        const drawClearanceRect = (rect, hit) => {
+          const rx = Math.round(rect.x - rect.padHw) + 0.5;
+          const ry = Math.round(rect.y - rect.padHh) + 0.5;
+          const rw = Math.round(rect.padHw * 2);
+          const rh = Math.round(rect.padHh * 2);
+          ctx.save();
+          if (hit) {
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.16)';
+            ctx.strokeStyle = 'rgba(239, 68, 68, 0.94)';
+            ctx.lineWidth = 2.2;
+            ctx.fillRect(rx, ry, rw, rh);
+            ctx.strokeRect(rx, ry, rw, rh);
+          } else {
+            ctx.strokeStyle = 'rgba(250, 204, 21, 0.52)';
+            ctx.lineWidth = 1.4;
+            ctx.setLineDash([5, 4]);
+            ctx.strokeRect(rx, ry, rw, rh);
+          }
+          ctx.restore();
+        };
+
+        for (const b of sim.buildings) {
+          if (b.koTimer > 0) continue;
+          const bRect = getBuildingClearanceRect(b.kind, b.x, b.y, b.facingDir);
+          const hit = rectsOverlap(ghostRect, bRect);
+          if (hit || Math.hypot(b.x - hoverWorld.x, b.y - hoverWorld.y) < 320) drawClearanceRect(bRect, hit);
+        }
+        for (const r of sim.obstacles) {
+          const rRect = getPropClearanceRect(r.x, r.y, r.radius, 6, 5);
+          const hit = rectsOverlap(ghostRect, rRect);
+          if (hit || Math.hypot(r.x - hoverWorld.x, r.y - hoverWorld.y) < 220) drawClearanceRect(rRect, hit);
+        }
+        for (const s of sim.supplyNodes) {
+          if (s.amount <= 0) continue;
+          const sRect = getPropClearanceRect(s.x, s.y, s.radius, 5, 4);
+          const hit = rectsOverlap(ghostRect, sRect);
+          if (hit || Math.hypot(s.x - hoverWorld.x, s.y - hoverWorld.y) < 220) drawClearanceRect(sRect, hit);
+        }
+        for (const cp of sim.capturePoints) {
+          const cpRect = getPropClearanceRect(cp.x, cp.y, cp.radius, 5, 4);
+          const hit = rectsOverlap(ghostRect, cpRect);
+          if (hit || Math.hypot(cp.x - hoverWorld.x, cp.y - hoverWorld.y) < 260) drawClearanceRect(cpRect, hit);
+        }
+
+        const gx = Math.round(hoverWorld.x - ghostRect.padHw) + 0.5;
+        const gy = Math.round(hoverWorld.y - ghostRect.padHh) + 0.5;
+        ctx.save();
+        ctx.strokeStyle = ok ? 'rgba(132, 204, 22, 0.85)' : 'rgba(239, 68, 68, 0.95)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(gx, gy, Math.round(ghostRect.padHw * 2), Math.round(ghostRect.padHh * 2));
+        ctx.restore();
+
+        if (!ok && placementCheck.reason) {
+          ctx.save();
+          ctx.font = 'bold 10px monospace';
+          ctx.textAlign = 'center';
+          const tw = ctx.measureText(placementCheck.reason).width + 12;
+          const ly = hoverWorld.y + ghostRect.padHh + 16;
+          ctx.fillStyle = 'rgba(20, 12, 12, 0.92)';
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.9)';
+          ctx.lineWidth = 1;
+          ctx.fillRect(hoverWorld.x - tw * 0.5, ly - 10, tw, 14);
+          ctx.strokeRect(hoverWorld.x - tw * 0.5, ly - 10, tw, 14);
+          ctx.fillStyle = '#FCA5A5';
+          ctx.fillText(placementCheck.reason, hoverWorld.x, ly);
+          ctx.restore();
+        }
+      }
 
       for (const pt of effects.particles) {
         ctx.globalAlpha = clamp(pt.life / pt.maxLife, 0, 1);
@@ -315,36 +479,23 @@
         const bTop = b.y - specB.radius - 26;
         const bBot = b.y + specB.radius * 0.68 + 4;
         this.drawHpBar(ctx, b.x, bTop, 54, b.hp, b.maxHp, b.displayHp, b.faction, pf, b.selected || b.hp < b.maxHp);
-        if (b.isRepairing) {
-          this.drawRepairBadge(ctx, b.x, bTop - 13, sim.elapsedTime, 'building');
-        } else if (b.buildProgress >= 1 && !sim.isBuildingPowered(b)) {
-          this.drawLowPowerBadge(ctx, b.x, bTop - 13, sim.elapsedTime);
-        }
 
-        // Bottom horizontal status bars directly beneath buildings (build / train / repair)
-        let rowY = bBot;
+        // Bottom horizontal status bars directly beneath buildings (build / train)
         if (b.buildProgress < 1) {
           const pctTxt = `${Math.round(b.buildProgress * 100)}%`;
-          this.drawWorldBar(ctx, b.x, rowY, 54, b.buildProgress, '#FACC15', {
+          this.drawWorldBar(ctx, b.x, bBot, 54, b.buildProgress, '#FACC15', {
             animateTime: sim.elapsedTime, badgeText: pctTxt, badgeColor: '#FDE68A'
           });
-          rowY += 8;
         } else if (b.faction === pf && b.queue.length > 0) {
           const q0 = b.queue[0];
           const prog = 1 - q0.remaining / Math.max(0.01, q0.total);
           const powered = sim.isBuildingPowered(b);
           const qTxt = b.queue.length > 1 ? `×${b.queue.length}` : `${Math.round(prog * 100)}%`;
-          this.drawWorldBar(ctx, b.x, rowY, 54, prog, '#38BDF8', {
+          this.drawWorldBar(ctx, b.x, bBot, 54, prog, '#38BDF8', {
             paused: !powered,
             animateTime: powered ? sim.elapsedTime : undefined,
             badgeText: !powered ? '⚡' : qTxt,
             badgeColor: !powered ? '#FCA5A5' : '#BAE6FD'
-          });
-          rowY += 8;
-        }
-        if (b.isRepairing) {
-          this.drawWorldBar(ctx, b.x, rowY, 54, b.hp / b.maxHp, '#34D399', {
-            animateTime: sim.elapsedTime, wrenchTime: sim.elapsedTime, wrenchMode: 'building'
           });
         }
       }
@@ -355,9 +506,6 @@
         const uTop = u.y - spec.radius - 20;
         const uBot = u.y + spec.radius * 0.72 + 4;
         this.drawHpBar(ctx, u.x, uTop, 32, u.hp, u.maxHp, u.displayHp, u.faction, pf, u.selected || u.hp < u.maxHp, u.rank, u.controlGroup);
-        if (u.isRepairing) {
-          this.drawRepairBadge(ctx, u.x, uTop - (u.rank > 0 ? 15 : 11), sim.elapsedTime, u.repairKind || 'auto');
-        }
         if (spec.isHarvester && u.supplyCarried > 0) {
           ctx.fillStyle = '#141118'; ctx.fillRect(u.x - 14, u.y - spec.radius - 14, 28, 3);
           ctx.fillStyle = '#FACC15'; ctx.fillRect(u.x - 14, u.y - spec.radius - 14, 28 * (u.supplyCarried / spec.supplyCapacity), 3);
@@ -484,79 +632,53 @@
 
     drawMiniWrench(ctx, x, y, t, mode = 'auto') {
       const col = mode === 'auto' ? '#34D399' : '#FACC15';
+      const step = Math.round(Math.sin(Math.floor(t * 10) / 10 * 10.5));
       ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(-0.35 + Math.sin(t * 10.5) * 0.42);
-      ctx.fillStyle = col;
-      ctx.fillRect(-1, -3, 2, 6);
-      ctx.beginPath();
-      ctx.arc(0, -3.1, 2.2, 0.45 * Math.PI, 2.55 * Math.PI);
-      ctx.fill();
+      ctx.translate(Math.round(x), Math.round(y));
+      if (step !== 0) ctx.rotate(step * 0.35);
       ctx.fillStyle = '#141118';
-      ctx.fillRect(-0.7, -4.8, 1.4, 2.2);
-      ctx.restore();
-    }
-
-    drawRepairBadge(ctx, x, y, t, mode = 'auto') {
-      const bob = Math.sin(t * 7.5) * 1.6;
-      const pulse = 0.65 + 0.35 * Math.sin(t * 9.0);
-      const col = mode === 'auto' ? '#34D399' : '#FACC15';
-      const cy = y + bob;
-
-      ctx.save();
-      ctx.translate(x, cy);
-      ctx.fillStyle = 'rgba(18, 15, 12, 0.90)';
-      ctx.strokeStyle = col;
-      ctx.globalAlpha = pulse;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.globalAlpha = 1;
-      this.drawMiniWrench(ctx, 0, 0, t, mode);
-
-      const rise = (t * 1.4) % 1;
-      ctx.globalAlpha = 1 - rise;
-      ctx.fillStyle = '#6EE7B7';
-      ctx.fillRect(6, -3 - rise * 6, 3, 1);
-      ctx.fillRect(7, -4 - rise * 6, 1, 3);
-      ctx.restore();
-    }
-
-    drawLowPowerBadge(ctx, x, y, t) {
-      if (Math.sin(t * 7.5) < -0.25) return;
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.fillStyle = 'rgba(28, 10, 10, 0.92)';
-      ctx.strokeStyle = '#EF4444';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(0, 0, 7.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = '#FACC15';
-      ctx.beginPath();
-      ctx.moveTo(1.2, -4.8);
-      ctx.lineTo(-3.0, 0.4);
-      ctx.lineTo(-0.2, 0.4);
-      ctx.lineTo(-1.4, 4.8);
-      ctx.lineTo(3.0, -0.5);
-      ctx.lineTo(0.2, -0.5);
-      ctx.closePath();
-      ctx.fill();
+      ctx.fillRect(-3, -5, 6, 9);
+      ctx.fillStyle = col;
+      ctx.fillRect(-1, -1, 2, 4);
+      ctx.fillRect(-2, -4, 1, 3);
+      ctx.fillRect(1, -4, 1, 3);
+      ctx.fillRect(-2, -2, 4, 1);
       ctx.restore();
     }
 
     renderMinimap(ctx, w, h, sim, cam, vw, vh) {
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = '#4A3A29';
-      ctx.fillRect(0, 0, w, h);
-      const sx = w / WORLD_WIDTH, sy = h / WORLD_HEIGHT;
+      const worldW = sim.worldW || WORLD_WIDTH;
+      const worldH = sim.worldH || WORLD_HEIGHT;
+      const biome = FL.MAPS ? FL.MAPS.getBiome(sim.currentMap && sim.currentMap.biome) : null;
+      const mm = (biome && biome.minimap) || { bg: '#4A3A29', grid: 'rgba(212, 169, 66, 0.08)', road: '#5C452F', pad: '#696256', rock: '#33261A' };
 
-      ctx.strokeStyle = 'rgba(212, 169, 66, 0.08)';
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = mm.bg;
+      ctx.fillRect(0, 0, w, h);
+      const sx = w / worldW, sy = h / worldH;
+
+      // Subtle roads and concrete pads on tactical radar
+      if (sim.currentMap) {
+        ctx.save();
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = mm.road;
+        for (const road of sim.currentMap.roads || []) {
+          if (!road.points || road.points.length < 2) continue;
+          ctx.lineWidth = Math.max(1.5, (road.width || 60) * sx);
+          traceRoadPath(ctx, road.points, sx, sy, road.smooth !== false);
+          ctx.stroke();
+        }
+        ctx.fillStyle = mm.pad;
+        for (const pad of sim.currentMap.expandedPads || []) {
+          const pw = (pad.w || 368) * sx;
+          const ph = (pad.h || 268) * sy;
+          ctx.fillRect(pad.x * sx - pw * 0.5, pad.y * sy - ph * 0.5, pw, ph);
+        }
+        ctx.restore();
+      }
+
+      ctx.strokeStyle = mm.grid;
       ctx.lineWidth = 1;
       for (let gx = w * 0.25; gx < w; gx += w * 0.25) {
         ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
@@ -566,8 +688,10 @@
       }
 
       for (const r of sim.obstacles) {
-        ctx.fillStyle = '#33261A';
-        ctx.fillRect(r.x * sx - 2, r.y * sy - 2, 4, 4);
+        ctx.fillStyle = mm.rock;
+        const rw = Math.max(3, r.radius * sx * 1.6);
+        const rh = Math.max(3, r.radius * sy * 1.6);
+        ctx.fillRect(r.x * sx - rw * 0.5, r.y * sy - rh * 0.5, rw, rh);
       }
       for (const o of sim.supplyNodes) {
         if (o.amount <= 0) continue;
@@ -592,7 +716,7 @@
         ctx.fillRect(u.x * sx - 1.5, u.y * sy - 1.5, 3, 3);
       }
 
-      if (sim.fog) sim.fog.renderMinimap(ctx, w, h);
+      if (sim.fog && !sim.demoMode) sim.fog.renderMinimap(ctx, w, h);
 
       const camL = (cam.x - vw / (2 * cam.zoom)) * sx;
       const camT = (cam.y - vh / (2 * cam.zoom)) * sy;
@@ -603,6 +727,89 @@
       ctx.strokeRect(camL, camT, camW, camH);
     }
   }
+
+  GameRenderer.renderMapThumbnail = function renderMapThumbnail(canvas, rawMap) {
+    if (!canvas || !rawMap) return;
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const map = FL.MAPS ? FL.MAPS.expandMap(rawMap) : rawMap;
+    const worldW = (map.size && map.size.w) || WORLD_WIDTH;
+    const worldH = (map.size && map.size.h) || WORLD_HEIGHT;
+    const biome = FL.MAPS ? FL.MAPS.getBiome(map.biome) : null;
+    const mm = (biome && biome.minimap) || { bg: '#4A3A29', grid: 'rgba(212,169,66,0.10)', road: '#5C452F', pad: '#696256', rock: '#2E2217' };
+
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = mm.bg;
+    ctx.fillRect(0, 0, w, h);
+
+    // Letterbox preserving exact aspect ratio inside preview box
+    const scale = Math.min((w - 6) / worldW, (h - 6) / worldH);
+    const ox = (w - worldW * scale) * 0.5;
+    const oy = (h - worldH * scale) * 0.5;
+
+    ctx.save();
+    ctx.translate(ox, oy);
+    ctx.fillStyle = (biome && biome.terrain && biome.terrain.lo) || mm.bg;
+    ctx.globalAlpha = 0.32;
+    ctx.fillRect(0, 0, worldW * scale, worldH * scale);
+    ctx.globalAlpha = 1;
+
+    ctx.strokeStyle = mm.grid;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, worldW * scale - 1, worldH * scale - 1);
+
+    // Roads
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = mm.road;
+    for (const road of map.roads || []) {
+      if (!road.points || road.points.length < 2) continue;
+      ctx.lineWidth = Math.max(1.5, (road.width || 60) * scale);
+      traceRoadPath(ctx, road.points, scale, scale, road.smooth !== false);
+      ctx.stroke();
+    }
+
+    // Pads
+    ctx.fillStyle = mm.pad;
+    for (const pad of map.expandedPads || []) {
+      const pw = Math.max(4, (pad.w || 368) * scale);
+      const ph = Math.max(3, (pad.h || 268) * scale);
+      ctx.fillRect(pad.x * scale - pw * 0.5, pad.y * scale - ph * 0.5, pw, ph);
+    }
+
+    // Rocks
+    ctx.fillStyle = mm.rock;
+    for (const r of map.obstacles || []) {
+      const rr = Math.max(1.5, r.radius * scale);
+      ctx.beginPath();
+      ctx.arc(r.x * scale, r.y * scale, rr, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Supplies
+    ctx.fillStyle = '#FACC15';
+    for (const s of map.expandedSupplyNodes || []) {
+      ctx.fillRect(s.x * scale - 1, s.y * scale - 1, 2.2, 2.2);
+    }
+
+    // Capture points
+    ctx.fillStyle = '#F59E0B';
+    for (const cp of map.capturePoints || []) {
+      ctx.fillRect(cp.x * scale - 2.5, cp.y * scale - 2.5, 5, 5);
+    }
+
+    // Spawns
+    for (const sp of map.spawns || []) {
+      ctx.fillStyle = sp.slot === 'enemy' ? '#84CC16' : '#EF4444';
+      ctx.strokeStyle = '#120E0B';
+      ctx.lineWidth = 1;
+      ctx.fillRect(sp.x * scale - 3.5, sp.y * scale - 3.5, 7, 7);
+      ctx.strokeRect(sp.x * scale - 3.5, sp.y * scale - 3.5, 7, 7);
+    }
+
+    ctx.restore();
+  };
 
   function clamp(v, a, b) { return v < a ? a : v > b ? b : v; }
   FL.GameRenderer = GameRenderer;

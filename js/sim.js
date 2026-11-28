@@ -169,28 +169,28 @@
       produces: ['supply']
     },
     motorpool: {
-      kind: 'motorpool', name: 'Ангар', role: 'Производство техники', hotkey: '6',
+      kind: 'motorpool', name: 'Ангар', role: 'Боевая техника · Склад', hotkey: '6',
       cost: 275, buildTime: 6.0, maxHp: 820, radius: 42, footprintW: 88, footprintH: 88,
       powerDelta: -20, sight: 260, range: 0, damage: 0, cooldown: 0, buildable: true, canSell: true,
-      produces: ['combat']
+      produces: ['combat'], requiresTech: 'depot'
     },
     bunker: {
-      kind: 'bunker', name: 'ДОТ ПТО', role: 'Оборона базы', hotkey: '7',
+      kind: 'bunker', name: 'ДОТ ПТО', role: 'Оборона · Склад', hotkey: '7',
       cost: 150, buildTime: 3.2, maxHp: 420, radius: 24, footprintW: 50, footprintH: 50,
       powerDelta: -15, sight: 330, range: 290, damage: 25, cooldown: 0.72, projSpeed: 590,
-      buildable: true, canSell: true, produces: []
+      buildable: true, canSell: true, produces: [], requiresTech: 'depot'
     },
     workshop: {
-      kind: 'workshop', name: 'Рембаза', role: 'Починка рядом', hotkey: '8',
+      kind: 'workshop', name: 'Рембаза', role: 'Починка · Склад', hotkey: '8',
       cost: 195, buildTime: 4.3, maxHp: 530, radius: 34, footprintW: 72, footprintH: 72,
       powerDelta: -15, sight: 240, range: 0, damage: 0, cooldown: 0, buildable: true, canSell: true,
-      produces: [], repairRadius: 195, repairRate: 30
+      produces: [], repairRadius: 195, repairRate: 30, requiresTech: 'depot'
     },
     command: {
-      kind: 'command', name: 'Штаб-связь', role: 'Открывает элитную технику', hotkey: '9',
+      kind: 'command', name: 'Штаб-связь', role: 'Элитный тех · Ангар', hotkey: '9',
       cost: 315, buildTime: 5.6, maxHp: 590, radius: 36, footprintW: 74, footprintH: 74,
       powerDelta: -25, sight: 350, range: 0, damage: 0, cooldown: 0, buildable: true, canSell: true,
-      produces: []
+      produces: [], requiresTech: 'motorpool'
     },
     heavyGun: {
       kind: 'heavyGun', name: 'Батарея', role: 'Тяжёлый ДОТ · Связь', hotkey: '0',
@@ -223,6 +223,23 @@
     }
   };
 
+  const BLD_Y_SCALE = 0.72;
+  function getBuildingClearanceRect(kind, x, y, facingDir = 0) {
+    const spec = BUILDING_SPECS[kind];
+    const rot = ((facingDir || 0) % 2 + 2) % 2 === 1;
+    const fw = rot ? spec.footprintH : spec.footprintW;
+    const fh = rot ? spec.footprintW : spec.footprintH;
+    const hw = fw * 0.5;
+    const hh = fh * 0.5 * BLD_Y_SCALE;
+    return { x, y, hw, hh, padHw: hw + 12, padHh: hh + 9 };
+  }
+  function getPropClearanceRect(x, y, radius, padX = 5, padY = 4) {
+    return { x, y, hw: radius, hh: radius * BLD_Y_SCALE, padHw: radius + padX, padHh: radius * BLD_Y_SCALE + padY };
+  }
+  function rectsOverlap(a, b) {
+    return Math.abs(a.x - b.x) < a.padHw + b.padHw && Math.abs(a.y - b.y) < a.padHh + b.padHh;
+  }
+
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
   function normAngle(a) {
     while (a > Math.PI) a -= Math.PI * 2;
@@ -241,6 +258,12 @@
       this.effects = opts.effects || null;
       this.sound = opts.sound || null;
       this.fog = opts.fog || null;
+
+      this.worldW = WORLD_WIDTH;
+      this.worldH = WORLD_HEIGHT;
+      this.currentMap = null;
+      this.playerSpawn = { slot: 'player', x: 360, y: 1240, facing: 0 };
+      this.enemySpawn = { slot: 'enemy', x: 2040, y: 360, facing: 2 };
 
       this.phase = 'title';
       this.outcome = null;
@@ -281,7 +304,32 @@
       this.pendingOutcome = null;
       this.defeatDelay = 0;
 
+      this.loadMap(opts.map || (FL.MAPS ? FL.MAPS.getDefaultMap() : null));
       this.setupDemoBattle();
+    }
+
+    loadMap(rawMap) {
+      const mapsApi = FL.MAPS;
+      const expanded = mapsApi ? mapsApi.expandMap(rawMap || mapsApi.getDefaultMap()) : null;
+      if (expanded) {
+        this.currentMap = expanded;
+        this.worldW = expanded.size.w;
+        this.worldH = expanded.size.h;
+        const pSp = expanded.spawns.find((s) => s.slot === 'player');
+        const eSp = expanded.spawns.find((s) => s.slot === 'enemy');
+        this.playerSpawn = pSp ? { ...pSp } : { slot: 'player', x: Math.round(this.worldW * 0.15), y: Math.round(this.worldH * 0.78), facing: 0 };
+        this.enemySpawn = eSp ? { ...eSp } : { slot: 'enemy', x: Math.round(this.worldW * 0.85), y: Math.round(this.worldH * 0.22), facing: 2 };
+      } else {
+        this.currentMap = null;
+        this.worldW = WORLD_WIDTH;
+        this.worldH = WORLD_HEIGHT;
+        this.playerSpawn = { slot: 'player', x: 360, y: 1240, facing: 0 };
+        this.enemySpawn = { slot: 'enemy', x: 2040, y: 360, facing: 2 };
+      }
+      if (this.fog && typeof this.fog.resize === 'function') {
+        this.fog.resize(this.worldW, this.worldH);
+      }
+      return this.currentMap;
     }
 
     mkEcon(supplies) {
@@ -315,6 +363,51 @@
     }
 
     buildTerrainLayout() {
+      const m = this.currentMap;
+      if (m) {
+        for (const r of m.obstacles) {
+          this.obstacles.push({
+            id: this.nextId++,
+            kind: r.kind || 'rock',
+            x: r.x,
+            y: r.y,
+            radius: r.radius,
+            variant: r.variant || 0
+          });
+        }
+        for (const s of m.expandedSupplyNodes) {
+          this.supplyNodes.push({
+            id: this.nextId++,
+            x: s.x,
+            y: s.y,
+            amount: s.amount,
+            maxAmount: s.maxAmount || s.amount,
+            variant: s.variant || 0,
+            radius: s.radius || 19
+          });
+        }
+        for (const cp of m.capturePoints) {
+          const initOwner = cp.initialOwner === 'player'
+            ? this.playerFaction
+            : cp.initialOwner === 'enemy'
+              ? this.enemyFaction
+              : null;
+          this.capturePoints.push({
+            id: this.nextId++,
+            x: cp.x,
+            y: cp.y,
+            radius: cp.radius || CAPTURE_POINT_RADIUS,
+            owner: initOwner,
+            capturingFaction: null,
+            progress: initOwner ? 1 : 0,
+            passiveRate: cp.rate || CAPTURE_POINT_SUPPLY_RATE,
+            contested: false
+          });
+        }
+        return;
+      }
+
+      // Fallback if FL.MAPS was not loaded
       const rocks = [
         [920, 440, 32, 0], [975, 470, 26, 1], [1025, 435, 24, 2],
         [1480, 1160, 32, 0], [1425, 1130, 26, 1], [1375, 1165, 24, 2],
@@ -324,9 +417,8 @@
         [1190, 250, 28, 0], [1210, 1350, 28, 0]
       ];
       for (const [x, y, radius, variant] of rocks) {
-        this.obstacles.push({ id: this.nextId++, x, y, radius, variant });
+        this.obstacles.push({ id: this.nextId++, kind: 'rock', x, y, radius, variant });
       }
-
       const addSup = (cx, cy, count, amt) => {
         const offs = [[0, 0], [46, -18], [-44, 20], [34, 38], [-38, -32], [82, 16], [-78, -6]];
         for (let i = 0; i < Math.min(count, offs.length); i++) {
@@ -341,7 +433,6 @@
       addSup(720, 280, 5, 1000);
       addSup(1680, 1320, 5, 1000);
       addSup(1200, 800, 4, 1200);
-
       for (const [x, y] of [[760, 560], [1200, 800], [1640, 1040]]) {
         this.capturePoints.push({
           id: this.nextId++, x, y, radius: CAPTURE_POINT_RADIUS,
@@ -351,7 +442,51 @@
       }
     }
 
-    setupDemoBattle() {
+    isSpotClearForBuilding(kind, x, y, facingDir = 0) {
+      const candidate = getBuildingClearanceRect(kind, x, y, facingDir);
+      const marginX = candidate.hw + 16;
+      const marginY = candidate.hh + 12;
+      if (x < marginX || x > this.worldW - marginX || y < marginY || y > this.worldH - marginY) return false;
+      for (const b of this.buildings) {
+        if (b.koTimer > 0) continue;
+        if (rectsOverlap(candidate, getBuildingClearanceRect(b.kind, b.x, b.y, b.facingDir))) return false;
+      }
+      for (const r of this.obstacles) {
+        if (rectsOverlap(candidate, getPropClearanceRect(r.x, r.y, r.radius, 6, 5))) return false;
+      }
+      for (const s of this.supplyNodes) {
+        if (s.amount <= 0) continue;
+        if (rectsOverlap(candidate, getPropClearanceRect(s.x, s.y, s.radius, 5, 4))) return false;
+      }
+      for (const cp of this.capturePoints) {
+        if (rectsOverlap(candidate, getPropClearanceRect(cp.x, cp.y, cp.radius, 5, 4))) return false;
+      }
+      return true;
+    }
+
+    findSafeBuildingSpot(kind, anchorX, anchorY, prefX, prefY, facingDir = 0, maxR = 360) {
+      if (this.isSpotClearForBuilding(kind, prefX, prefY, facingDir)) {
+        return { x: prefX, y: prefY };
+      }
+      const radii = [120, 165, 215, 270, Math.min(340, maxR)];
+      const baseAng = Math.atan2(prefY - anchorY, prefX - anchorX);
+      for (const rad of radii) {
+        for (let i = 0; i < 16; i++) {
+          const sign = i % 2 === 0 ? 1 : -1;
+          const step = Math.ceil(i / 2);
+          const ang = baseAng + sign * step * (Math.PI / 8);
+          const cx = anchorX + Math.cos(ang) * rad;
+          const cy = anchorY + Math.sin(ang) * rad;
+          if (this.isSpotClearForBuilding(kind, cx, cy, facingDir)) {
+            return { x: cx, y: cy };
+          }
+        }
+      }
+      return null;
+    }
+
+    setupDemoBattle(mapData = null) {
+      if (mapData) this.loadMap(mapData);
       this.clearWorld();
       this.demoMode = true;
       this.phase = 'title';
@@ -360,39 +495,75 @@
       this.buildTerrainLayout();
       this.economies = { red: this.mkEcon(800), green: this.mkEcon(800) };
 
-      this.spawnBuilding('red', 'hq', 360, 1240);
-      this.spawnBuilding('red', 'generator', 160, 1280);
-      this.spawnBuilding('red', 'generator', 160, 1190);
-      this.spawnBuilding('red', 'motorpool', 540, 1220);
-      this.spawnBuilding('red', 'command', 240, 1140);
-      this.spawnBuilding('red', 'heavyGun', 630, 1090);
+      const pSp = this.playerSpawn;
+      const eSp = this.enemySpawn;
+      const cx = this.worldW * 0.5;
+      const cy = this.worldH * 0.5;
 
-      this.spawnBuilding('green', 'hq', 2040, 360);
-      this.spawnBuilding('green', 'generator', 2240, 320);
-      this.spawnBuilding('green', 'generator', 2240, 410);
-      this.spawnBuilding('green', 'motorpool', 1860, 380);
-      this.spawnBuilding('green', 'command', 2160, 460);
-      this.spawnBuilding('green', 'heavyGun', 1770, 510);
+      const spawnDemoBase = (fac, sp, otherSp) => {
+        this.spawnBuilding(fac, 'hq', sp.x, sp.y, true, sp.facing);
+        const dx = otherSp.x - sp.x;
+        const dy = otherSp.y - sp.y;
+        const len = Math.max(1, Math.hypot(dx, dy));
+        const fx = dx / len, fy = dy / len;
+        const px = -fy, py = fx;
+        const layout = [
+          ['generator', -160, -80],
+          ['generator', -150, 75],
+          ['motorpool', 165, 70],
+          ['command', -115, -135],
+          ['heavyGun', 270, -65]
+        ];
+        for (const [kind, fwd, side] of layout) {
+          const tx = sp.x + fx * fwd + px * side;
+          const ty = sp.y + fy * fwd + py * side;
+          const spot = this.findSafeBuildingSpot(kind, sp.x, sp.y, tx, ty, sp.facing, 360);
+          if (spot) this.spawnBuilding(fac, kind, spot.x, spot.y, true, sp.facing);
+        }
+      };
 
-      for (const [k, x, y] of [
-        ['red_light_tank', 960, 900], ['red_flame_tank', 920, 960], ['red_orb_disruptor', 1010, 850],
-        ['red_mortar', 810, 1020], ['red_apc_truck', 890, 860], ['red_buggy', 1050, 930]
-      ]) {
+      spawnDemoBase('red', pSp, eSp);
+      spawnDemoBase('green', eSp, pSp);
+
+      const dx = eSp.x - pSp.x;
+      const dy = eSp.y - pSp.y;
+      const len = Math.max(1, Math.hypot(dx, dy));
+      const ux = dx / len, uy = dy / len;
+      const px = -uy, py = ux;
+
+      const redStart = { x: cx - ux * Math.min(260, len * 0.17), y: cy - uy * Math.min(260, len * 0.17) };
+      const greenStart = { x: cx + ux * Math.min(260, len * 0.17), y: cy + uy * Math.min(260, len * 0.17) };
+
+      const redSquad = [
+        ['red_light_tank', 20, -25], ['red_flame_tank', -20, 45], ['red_orb_disruptor', 65, -75],
+        ['red_mortar', -110, 55], ['red_apc_truck', -45, -40], ['red_buggy', 85, 25]
+      ];
+      for (const [k, fwd, side] of redSquad) {
+        const x = clamp(redStart.x + ux * fwd + px * side, 70, this.worldW - 70);
+        const y = clamp(redStart.y + uy * fwd + py * side, 70, this.worldH - 70);
         const u = this.spawnUnit('red', k, x, y);
-        u.order = 'attackMove'; u.targetX = 1320; u.targetY = 720;
+        u.order = 'attackMove';
+        u.targetX = clamp(greenStart.x, 80, this.worldW - 80);
+        u.targetY = clamp(greenStart.y, 80, this.worldH - 80);
       }
 
-      for (const [k, x, y] of [
-        ['green_medium_tank', 1420, 680], ['green_ion_tank', 1460, 630], ['green_laser_tank', 1380, 750],
-        ['green_missile_truck', 1570, 590], ['green_radar_truck', 1480, 790], ['green_humvee', 1340, 690]
-      ]) {
+      const greenSquad = [
+        ['green_medium_tank', -20, -25], ['green_ion_tank', 25, -70], ['green_laser_tank', -60, 45],
+        ['green_missile_truck', 110, -55], ['green_radar_truck', 55, 65], ['green_humvee', -85, -15]
+      ];
+      for (const [k, fwd, side] of greenSquad) {
+        const x = clamp(greenStart.x + ux * fwd + px * side, 70, this.worldW - 70);
+        const y = clamp(greenStart.y + uy * fwd + py * side, 70, this.worldH - 70);
         const u = this.spawnUnit('green', k, x, y);
-        u.order = 'attackMove'; u.targetX = 1080; u.targetY = 880;
+        u.order = 'attackMove';
+        u.targetX = clamp(redStart.x, 80, this.worldW - 80);
+        u.targetY = clamp(redStart.y, 80, this.worldH - 80);
       }
       this.recomputePower();
     }
 
-    startNewGame(playerFaction = this.playerFaction, diff = this.difficulty) {
+    startNewGame(playerFaction = this.playerFaction, diff = this.difficulty, mapData = null) {
+      if (mapData) this.loadMap(mapData);
       this.difficulty = diff;
       this.playerFaction = playerFaction === 'green' ? 'green' : 'red';
       this.enemyFaction = this.playerFaction === 'red' ? 'green' : 'red';
@@ -405,16 +576,39 @@
       this.phase = 'playing';
       this.buildTerrainLayout();
 
+      const rules = (this.currentMap && this.currentMap.rules) || null;
+      const pSup = rules && Number.isFinite(rules.startSuppliesPlayer) ? rules.startSuppliesPlayer : prof.playerStartSup;
+      const eSup = rules && Number.isFinite(rules.startSuppliesEnemy) ? rules.startSuppliesEnemy : prof.enemyStartSup;
+
       this.economies = {
-        [pf]: this.mkEcon(prof.playerStartSup),
-        [ef]: this.mkEcon(prof.enemyStartSup)
+        [pf]: this.mkEcon(pSup),
+        [ef]: this.mkEcon(eSup)
       };
 
-      // Player SW Base (HQ only — build base & economy from scratch)
-      this.spawnBuilding(pf, 'hq', 360, 1240, true);
+      // Player Base (HQ only by default — build base & economy from scratch)
+      this.spawnBuilding(pf, 'hq', this.playerSpawn.x, this.playerSpawn.y, true, this.playerSpawn.facing);
 
-      // Enemy NE Base (HQ only)
-      this.spawnBuilding(ef, 'hq', 2040, 360, true);
+      // Enemy Base (HQ only by default)
+      this.spawnBuilding(ef, 'hq', this.enemySpawn.x, this.enemySpawn.y, true, this.enemySpawn.facing);
+
+      // Optional scenario overrides for custom maps
+      if (rules && Array.isArray(rules.prebuiltBuildings)) {
+        for (const pb of rules.prebuiltBuildings) {
+          const fac = pb.slot === 'enemy' ? ef : pf;
+          if (BUILDING_SPECS[pb.kind]) {
+            this.spawnBuilding(fac, pb.kind, pb.x, pb.y, true, pb.facing);
+          }
+        }
+      }
+      if (rules && Array.isArray(rules.startingUnits)) {
+        for (const su of rules.startingUnits) {
+          const fac = su.slot === 'enemy' ? ef : pf;
+          const kind = UNIT_SPECS[su.kind] ? su.kind : null;
+          if (kind && UNIT_SPECS[kind].faction === fac) {
+            this.spawnUnit(fac, kind, su.x, su.y, false);
+          }
+        }
+      }
 
       this.aiWaveTimer = prof.firstWave;
       this.recomputePower();
@@ -423,8 +617,13 @@
 
     spawnBuilding(faction, kind, x, y, built = true, facingDir = null) {
       const spec = BUILDING_SPECS[kind];
-      const isSwBase = x < 1200 && y > 800;
-      const dir = facingDir !== null && facingDir !== undefined ? (((facingDir % 4) + 4) % 4) : (isSwBase ? 0 : 2);
+      let dir;
+      if (facingDir !== null && facingDir !== undefined) {
+        dir = ((facingDir % 4) + 4) % 4;
+      } else {
+        const angToCenter = Math.atan2(this.worldH * 0.5 - y, this.worldW * 0.5 - x);
+        dir = ((Math.round(angToCenter / (Math.PI * 0.5)) % 4) + 4) % 4;
+      }
       const facingRad = dir * (Math.PI * 0.5);
       const exitDist = spec.radius + 58;
       const b = {
@@ -433,9 +632,11 @@
         facingDir: dir,
         facingRad,
         angle: facingRad,
+        scanAngle: facingRad,
+        scanTimer: 1.5 + Math.random() * 2.5,
         fireCooldown: 0, hitFlash: 0, recoil: 0,
-        rallyX: clamp(x + Math.cos(facingRad) * exitDist, 40, WORLD_WIDTH - 40),
-        rallyY: clamp(y + Math.sin(facingRad) * exitDist, 40, WORLD_HEIGHT - 40),
+        rallyX: clamp(x + Math.cos(facingRad) * exitDist, 40, this.worldW - 40),
+        rallyY: clamp(y + Math.sin(facingRad) * exitDist, 40, this.worldH - 40),
         queue: [], selected: false, koTimer: 0,
         buildProgress: built ? 1 : 0.05,
         repairing: false, isRepairing: false, repeatQueue: false, repeatKind: null
@@ -459,8 +660,7 @@
     }
 
     spawnUnit(faction, kind, x, y, materialize = false) {
-      const isSw = x < 1200 && y > 800;
-      const ang = isSw ? -Math.PI * 0.25 : Math.PI * 0.75;
+      const ang = Math.atan2(this.worldH * 0.5 - y, this.worldW * 0.5 - x);
       const spec = UNIT_SPECS[kind];
       const u = {
         id: this.nextId++, kind, faction, x, y, vx: 0, vy: 0,
@@ -528,34 +728,65 @@
       this.alertTimer = 2.6;
     }
 
+    getAvailablePower(faction) {
+      const prod = this.economies[faction].powerProduced;
+      let committedCons = 0;
+      for (const b of this.buildings) {
+        if (b.faction !== faction || b.koTimer > 0) continue;
+        const d = BUILDING_SPECS[b.kind].powerDelta;
+        if (d < 0) committedCons += -d;
+      }
+      return prod - committedCons;
+    }
+
+    getBuildingLockReason(faction, kind) {
+      const spec = BUILDING_SPECS[kind];
+      if (!spec || !spec.buildable) return 'Нельзя строить';
+      if (kind !== 'generator' && kind !== 'depot' && !this.hasTech(faction, 'depot')) {
+        return 'Нужен Склад';
+      }
+      if (spec.requiresTech && !this.hasTech(faction, spec.requiresTech)) {
+        if (spec.requiresTech === 'depot') return 'Нужен Склад';
+        if (spec.requiresTech === 'motorpool') return 'Нужен Ангар';
+        return 'Нужен Штаб-связь';
+      }
+      if (spec.powerDelta < 0 && this.isLowPower(faction)) {
+        return 'Недостаточно энергии';
+      }
+      return null;
+    }
+
     canPlaceBuilding(faction, kind, x, y) {
       const spec = BUILDING_SPECS[kind];
       if (!spec || !spec.buildable) return { ok: false, reason: 'Нельзя строить' };
-      if (spec.requiresTech && !this.hasTech(faction, spec.requiresTech)) return { ok: false, reason: 'Нужен Штаб-связь' };
+      const lockReason = this.getBuildingLockReason(faction, kind);
+      if (lockReason) return { ok: false, reason: lockReason };
       if (this.economies[faction].supplies < spec.cost) return { ok: false, reason: 'Недостаточно припасов' };
 
-      const margin = spec.radius + 16;
-      if (x < margin || x > WORLD_WIDTH - margin || y < margin || y > WORLD_HEIGHT - margin) {
+      const candidate = getBuildingClearanceRect(kind, x, y, faction === this.playerFaction ? this.placementDir : 0);
+      const marginX = candidate.hw + 16;
+      const marginY = candidate.hh + 12;
+      if (x < marginX || x > this.worldW - marginX || y < marginY || y > this.worldH - marginY) {
         return { ok: false, reason: 'За границей сектора' };
       }
       let nearBase = false;
       for (const b of this.buildings) {
-        if (b.faction !== faction || b.koTimer > 0) continue;
-        const br = BUILDING_SPECS[b.kind].radius;
-        const d = Math.hypot(b.x - x, b.y - y);
-        if (d < br + spec.radius + 26) return { ok: false, reason: 'Занято постройкой' };
-        if (d <= 380) nearBase = true;
+        if (b.koTimer > 0) continue;
+        const bRect = getBuildingClearanceRect(b.kind, b.x, b.y, b.facingDir);
+        if (rectsOverlap(candidate, bRect)) return { ok: false, reason: 'Занято постройкой' };
+        if (b.faction === faction && Math.hypot(b.x - x, b.y - y) <= 380) nearBase = true;
       }
       if (!nearBase) return { ok: false, reason: 'Слишком далеко от базы' };
 
       for (const r of this.obstacles) {
-        if (Math.hypot(r.x - x, r.y - y) < r.radius + spec.radius + 12) return { ok: false, reason: 'Скалы мешают' };
+        if (rectsOverlap(candidate, getPropClearanceRect(r.x, r.y, r.radius, 6, 5))) return { ok: false, reason: 'Скалы мешают' };
       }
       for (const s of this.supplyNodes) {
-        if (Math.hypot(s.x - x, s.y - y) < s.radius + spec.radius + 10) return { ok: false, reason: 'Склад припасов' };
+        if (s.amount <= 0) continue;
+        if (rectsOverlap(candidate, getPropClearanceRect(s.x, s.y, s.radius, 5, 4))) return { ok: false, reason: 'Склад припасов' };
       }
       for (const cp of this.capturePoints) {
-        if (Math.hypot(cp.x - x, cp.y - y) < cp.radius + spec.radius + 10) return { ok: false, reason: 'Зона вышки' };
+        if (rectsOverlap(candidate, getPropClearanceRect(cp.x, cp.y, cp.radius, 5, 4))) return { ok: false, reason: 'Зона вышки' };
       }
       return { ok: true };
     }
@@ -799,8 +1030,8 @@
       const selUnits = this.units.filter((u) => u.faction === pf && u.selected && u.koTimer <= 0);
 
       if (selUnits.length === 0 && selB) {
-        selB.rallyX = clamp(wx, 40, WORLD_WIDTH - 40);
-        selB.rallyY = clamp(wy, 40, WORLD_HEIGHT - 40);
+        selB.rallyX = clamp(wx, 40, this.worldW - 40);
+        selB.rallyY = clamp(wy, 40, this.worldH - 40);
         this.orderMarkers.push({ x: selB.rallyX, y: selB.rallyY, kind: 'move', life: 0.7, maxLife: 0.7 });
         this.sound && this.sound.playClick();
         return;
@@ -850,8 +1081,8 @@
         const col = (idx % cols) - (cols - 1) * 0.5;
         u.order = attackMove ? 'attackMove' : 'move';
         u.targetEntityId = null;
-        u.targetX = clamp(wx + col * spacing, 40, WORLD_WIDTH - 40);
-        u.targetY = clamp(wy + row * spacing, 40, WORLD_HEIGHT - 40);
+        u.targetX = clamp(wx + col * spacing, 40, this.worldW - 40);
+        u.targetY = clamp(wy + row * spacing, 40, this.worldH - 40);
       });
 
       this.orderMarkers.push({
@@ -874,8 +1105,8 @@
         return false;
       }
       if (!st.ready) return false;
-      const x = clamp(wx, 80, WORLD_WIDTH - 80);
-      const y = clamp(wy, 80, WORLD_HEIGHT - 80);
+      const x = clamp(wx, 80, this.worldW - 80);
+      const y = clamp(wy, 80, this.worldH - 80);
       st.cooldown = st.maxCooldown;
       st.ready = false;
       this.activePowerMode = null;
@@ -1046,8 +1277,8 @@
             if (b.kind === 'depot') {
               const exitR = spec.radius + 26;
               const fRad = b.facingRad || 0;
-              const hx = clamp(b.x + Math.cos(fRad) * exitR, 60, WORLD_WIDTH - 60);
-              const hy = clamp(b.y + Math.sin(fRad) * exitR, 60, WORLD_HEIGHT - 60);
+              const hx = clamp(b.x + Math.cos(fRad) * exitR, 60, this.worldW - 60);
+              const hy = clamp(b.y + Math.sin(fRad) * exitR, 60, this.worldH - 60);
               const h = this.spawnUnit(b.faction, this.getSupplyUnitKind(b.faction), hx, hy, true);
               h.hullAngle = h.turretAngle = fRad;
               h.order = 'harvest';
@@ -1084,8 +1315,8 @@
             b.queue.shift();
             const exitR = spec.radius + 24;
             const fRad = b.facingRad || 0;
-            const sx = clamp(b.x + Math.cos(fRad) * exitR, 40, WORLD_WIDTH - 40);
-            const sy = clamp(b.y + Math.sin(fRad) * exitR, 40, WORLD_HEIGHT - 40);
+            const sx = clamp(b.x + Math.cos(fRad) * exitR, 40, this.worldW - 40);
+            const sy = clamp(b.y + Math.sin(fRad) * exitR, 40, this.worldH - 40);
             const u = this.spawnUnit(b.faction, item.kind, sx, sy, true);
             u.hullAngle = u.turretAngle = fRad;
             this.economies[b.faction].built++;
@@ -1120,6 +1351,7 @@
           const enemy = b.faction === 'red' ? 'green' : 'red';
           const target = this.findNearestEnemy(b.x, b.y, spec.range, enemy);
           if (target) {
+            b.scanTimer = 1.6 + Math.random() * 2.2;
             const aim = Math.atan2(target.y - b.y, target.x - b.x);
             b.angle = stepAngle(b.angle, aim, 6.2 * dt);
             if (b.fireCooldown <= 0 && Math.abs(normAngle(aim - b.angle)) < 0.35) {
@@ -1136,6 +1368,15 @@
                 this.fireProjectile(b.faction, 'shell', b.x + Math.cos(b.angle) * 24, b.y + Math.sin(b.angle) * 24, 16, target, spec.damage, 0, spec.projSpeed, null, false);
                 this.sound && this.sound.playCannon(0.10);
               }
+            }
+          } else {
+            b.scanTimer = (b.scanTimer ?? 1.5) - dt;
+            if (b.scanTimer <= 0) {
+              b.scanTimer = 2.2 + Math.random() * 3.0;
+              b.scanAngle = normAngle(b.facingRad + (Math.random() * 2 - 1) * Math.PI * 0.72);
+            }
+            if (b.scanAngle !== undefined) {
+              b.angle = stepAngle(b.angle, b.scanAngle, 1.5 * dt);
             }
           }
         }
@@ -1448,8 +1689,8 @@
       const spd = spec.speed * slowMult * fwdFactor;
       u.vx = Math.cos(u.hullAngle) * spd;
       u.vy = Math.sin(u.hullAngle) * spd;
-      u.x = clamp(u.x + u.vx * dt, 30, WORLD_WIDTH - 30);
-      u.y = clamp(u.y + u.vy * dt, 30, WORLD_HEIGHT - 30);
+      u.x = clamp(u.x + u.vx * dt, 30, this.worldW - 30);
+      u.y = clamp(u.y + u.vy * dt, 30, this.worldH - 30);
       return false;
     }
 
@@ -1470,10 +1711,10 @@
             const d = Math.sqrt(d2);
             const push = (minD - d) * 0.45;
             const nx = dx / d, ny = dy / d;
-            a.x = clamp(a.x - nx * push, 30, WORLD_WIDTH - 30);
-            a.y = clamp(a.y - ny * push, 30, WORLD_HEIGHT - 30);
-            b.x = clamp(b.x + nx * push, 30, WORLD_WIDTH - 30);
-            b.y = clamp(b.y + ny * push, 30, WORLD_HEIGHT - 30);
+            a.x = clamp(a.x - nx * push, 30, this.worldW - 30);
+            a.y = clamp(a.y - ny * push, 30, this.worldH - 30);
+            b.x = clamp(b.x + nx * push, 30, this.worldW - 30);
+            b.y = clamp(b.y + ny * push, 30, this.worldH - 30);
           }
         }
         for (const r of this.obstacles) {
@@ -1631,19 +1872,30 @@
     }
 
     updateDemoRespawns() {
+      const cx = this.worldW * 0.5;
+      const cy = this.worldH * 0.5;
       for (const f of ['red', 'green']) {
         const count = this.units.filter((u) => u.faction === f).length;
         if (count < 6) {
           const pool = FACTION_UNITS[f].slice(1);
           const k = pool[Math.floor(Math.random() * pool.length)];
-          const bx = f === 'red' ? 540 : 1860;
-          const by = f === 'red' ? 1160 : 440;
-          const u = this.spawnUnit(f, k, bx + (Math.random() - 0.5) * 90, by + (Math.random() - 0.5) * 90);
+          const origin = this.buildings.find((b) => b.faction === f && b.kind === 'motorpool' && b.koTimer <= 0)
+            || this.buildings.find((b) => b.faction === f && b.kind === 'hq' && b.koTimer <= 0)
+            || (f === 'red' ? this.playerSpawn : this.enemySpawn);
+          const dx = cx - origin.x, dy = cy - origin.y;
+          const len = Math.max(1, Math.hypot(dx, dy));
+          const sx = clamp(origin.x + (dx / len) * 90 + (Math.random() - 0.5) * 90, 60, this.worldW - 60);
+          const sy = clamp(origin.y + (dy / len) * 90 + (Math.random() - 0.5) * 90, 60, this.worldH - 60);
+          const u = this.spawnUnit(f, k, sx, sy);
           u.order = 'attackMove';
-          u.targetX = 1200 + (Math.random() - 0.5) * 260;
-          u.targetY = 800 + (Math.random() - 0.5) * 200;
+          u.targetX = clamp(cx + (Math.random() - 0.5) * 260, 80, this.worldW - 80);
+          u.targetY = clamp(cy + (Math.random() - 0.5) * 200, 80, this.worldH - 80);
         }
       }
+    }
+
+    getEnemyHq() {
+      return this.buildings.find((b) => b.faction === this.enemyFaction && b.kind === 'hq' && b.koTimer <= 0) || null;
     }
 
     updateEnemyAi(dt) {
@@ -1655,6 +1907,10 @@
       this.aiOutpostCd -= dt;
       this.aiStrikeCd -= dt;
 
+      const anchor = this.getEnemyHq()
+        || this.buildings.find((b) => b.faction === ef && b.koTimer <= 0)
+        || this.enemySpawn;
+
       if (this.aiTimer <= 0) {
         this.aiTimer = prof.decInt;
         const eEcon = this.economies[ef];
@@ -1662,26 +1918,52 @@
         const countB = (k) => this.buildings.filter((b) => b.faction === ef && b.kind === k && b.koTimer <= 0).length;
         const genBuilding = this.buildings.some((b) => b.faction === ef && b.kind === 'generator' && b.buildProgress < 1 && b.koTimer <= 0);
         const lowPwr = this.isLowPower(ef);
-        let effProd = 0, effCons = 0;
-        for (const b of this.buildings) {
-          if (b.faction !== ef || b.koTimer > 0) continue;
-          const d = BUILDING_SPECS[b.kind].powerDelta;
-          if (d >= 0) effProd += d;
-          else effCons += -d;
+        const availPwr = this.getAvailablePower(ef);
+        const hasDepot = this.hasTech(ef, 'depot');
+        const hasMotorpool = this.hasTech(ef, 'motorpool');
+        const hasCommand = this.hasTech(ef, 'command');
+
+        const frontTarget = this.getPlayerHq() || this.playerSpawn;
+        const fdx = frontTarget.x - anchor.x;
+        const fdy = frontTarget.y - anchor.y;
+        const flen = Math.max(1, Math.hypot(fdx, fdy));
+        const fx = fdx / flen, fy = fdy / flen;
+        const px = -fy, py = fx;
+
+        const relSpot = (fwd, side) => ({
+          x: anchor.x + fx * fwd + px * side,
+          y: anchor.y + fy * fwd + py * side
+        });
+
+        // Depot tries to hug the nearest supply cluster within base build radius
+        const nearSup = this.findNearestSupply(anchor.x, anchor.y);
+        let depotGoal = relSpot(40, 145);
+        if (nearSup) {
+          const sdx = nearSup.x - anchor.x, sdy = nearSup.y - anchor.y;
+          const sd = Math.max(1, Math.hypot(sdx, sdy));
+          const step = clamp(sd - 95, 110, 310);
+          depotGoal = { x: anchor.x + (sdx / sd) * step, y: anchor.y + (sdy / sd) * step };
         }
 
-        if ((lowPwr || effCons >= effProd - 10) && !genBuilding && eEcon.supplies >= BUILDING_SPECS.generator.cost) {
-          this.tryAiBuild('generator', 2180, 340);
+        if ((lowPwr || availPwr < 25) && !genBuilding && eEcon.supplies >= BUILDING_SPECS.generator.cost) {
+          const g = relSpot(-150, (Math.random() - 0.5) * 180);
+          this.tryAiBuild('generator', g.x, g.y, anchor);
         } else if (!has('depot') && eEcon.supplies >= BUILDING_SPECS.depot.cost) {
-          this.tryAiBuild('depot', 2160, 490);
-        } else if (!lowPwr && !has('motorpool') && eEcon.supplies >= BUILDING_SPECS.motorpool.cost) {
-          this.tryAiBuild('motorpool', 1860, 370);
-        } else if (!lowPwr && this.elapsedTime > prof.techTime && !has('command') && eEcon.supplies >= BUILDING_SPECS.command.cost) {
-          this.tryAiBuild('command', 2020, 220);
-        } else if (!lowPwr && countB('bunker') < prof.maxBunkers && eEcon.supplies >= BUILDING_SPECS.bunker.cost) {
-          this.tryAiBuild('bunker', 1760, 520);
-        } else if (!lowPwr && this.hasTech(ef, 'command') && countB('heavyGun') < 2 && eEcon.supplies >= BUILDING_SPECS.heavyGun.cost) {
-          this.tryAiBuild('heavyGun', 1780, 440);
+          this.tryAiBuild('depot', depotGoal.x, depotGoal.y, anchor);
+        } else if (hasDepot && !has('motorpool') && availPwr >= -BUILDING_SPECS.motorpool.powerDelta && eEcon.supplies >= BUILDING_SPECS.motorpool.cost) {
+          const mp = relSpot(165, 70);
+          this.tryAiBuild('motorpool', mp.x, mp.y, anchor);
+        } else if (hasDepot && hasMotorpool && this.elapsedTime > prof.techTime && !has('command') && availPwr >= 25 && eEcon.supplies >= BUILDING_SPECS.command.cost) {
+          const cmd = relSpot(-125, -135);
+          this.tryAiBuild('command', cmd.x, cmd.y, anchor);
+        } else if (hasDepot && countB('bunker') < prof.maxBunkers && availPwr >= 15 && eEcon.supplies >= BUILDING_SPECS.bunker.cost) {
+          const side = (countB('bunker') % 2 === 0 ? 1 : -1) * 115;
+          const bk = relSpot(255, side);
+          this.tryAiBuild('bunker', bk.x, bk.y, anchor);
+        } else if (hasDepot && hasCommand && countB('heavyGun') < 2 && availPwr >= 25 && eEcon.supplies >= BUILDING_SPECS.heavyGun.cost) {
+          const side = (countB('heavyGun') % 2 === 0 ? -1 : 1) * 95;
+          const hg = relSpot(235, side);
+          this.tryAiBuild('heavyGun', hg.x, hg.y, anchor);
         }
 
         const supKind = this.getSupplyUnitKind(ef);
@@ -1706,7 +1988,10 @@
 
       if (this.aiOutpostCd <= 0) {
         this.aiOutpostCd = 24;
-        const cp = this.capturePoints.find((c) => c.owner !== ef);
+        const unowned = this.capturePoints
+          .filter((c) => c.owner !== ef)
+          .sort((a, b) => distSq(a.x, a.y, anchor.x, anchor.y) - distSq(b.x, b.y, anchor.x, anchor.y));
+        const cp = unowned[0];
         const idle = this.units.filter((u) => u.faction === ef && !UNIT_SPECS[u.kind].isHarvester && u.order === 'idle').slice(0, 2);
         if (cp && idle.length > 0) {
           for (const u of idle) { u.order = 'attackMove'; u.targetX = cp.x; u.targetY = cp.y; }
@@ -1719,11 +2004,11 @@
         const squadSize = Math.min(prof.maxSquad, prof.minSquad + Math.floor(this.aiWaveCount * 0.6));
         if (idle.length >= squadSize) {
           this.aiWaveCount++;
-          const target = this.getPlayerHq() || this.buildings.find((b) => b.faction === pf) || { x: 360, y: 1240 };
+          const target = this.getPlayerHq() || this.buildings.find((b) => b.faction === pf) || this.playerSpawn;
           for (const u of idle.slice(0, squadSize)) {
             u.order = 'attackMove';
-            u.targetX = target.x + (Math.random() - 0.5) * 90;
-            u.targetY = target.y + (Math.random() - 0.5) * 90;
+            u.targetX = clamp(target.x + (Math.random() - 0.5) * 90, 40, this.worldW - 40);
+            u.targetY = clamp(target.y + (Math.random() - 0.5) * 90, 40, this.worldH - 40);
           }
         }
       }
@@ -1741,12 +2026,26 @@
       }
     }
 
-    tryAiBuild(kind, px, py) {
-      for (let attempt = 0; attempt < 16; attempt++) {
-        const x = px + (Math.random() - 0.5) * 300;
-        const y = py + (Math.random() - 0.5) * 300;
+    tryAiBuild(kind, px, py, anchor = null) {
+      for (let attempt = 0; attempt < 14; attempt++) {
+        const spread = attempt === 0 ? 0 : 220;
+        const x = px + (Math.random() - 0.5) * spread;
+        const y = py + (Math.random() - 0.5) * spread;
         if (this.canPlaceBuilding(this.enemyFaction, kind, x, y).ok) {
           return this.placeBuilding(this.enemyFaction, kind, x, y);
+        }
+      }
+      // Fallback spiral search around enemy base anchor so AI never gets stuck on tight maps
+      const base = anchor || this.getEnemyHq() || this.enemySpawn;
+      const baseAng = Math.atan2(py - base.y, px - base.x);
+      for (const rad of [130, 185, 245, 305, 355]) {
+        for (let i = 0; i < 16; i++) {
+          const ang = baseAng + (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 8);
+          const x = base.x + Math.cos(ang) * rad;
+          const y = base.y + Math.sin(ang) * rad;
+          if (this.canPlaceBuilding(this.enemyFaction, kind, x, y).ok) {
+            return this.placeBuilding(this.enemyFaction, kind, x, y);
+          }
         }
       }
       return null;
@@ -1827,7 +2126,8 @@
 
   FL.CONSTANTS = {
     WORLD_WIDTH, WORLD_HEIGHT, FACTION_INFO, FACTION_UNITS, BUILD_ORDER,
-    UNIT_SPECS, BUILDING_SPECS, SUPPORT_POWER_SPECS, VETERANCY_SPECS
+    UNIT_SPECS, BUILDING_SPECS, SUPPORT_POWER_SPECS, VETERANCY_SPECS,
+    getBuildingClearanceRect, getPropClearanceRect, rectsOverlap
   };
   FL.RtsSimulation = RtsSimulation;
 })();

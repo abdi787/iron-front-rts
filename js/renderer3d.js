@@ -3,7 +3,7 @@
   const FL = (window.FRONTLINE = window.FRONTLINE || {});
   const { RED_PAL, GREEN_PAL, NEUTRAL_PAL } = FL.MESH_CORE;
   const { buildUnitMeshes } = FL.UNIT_MESHES;
-  const { buildFactionBuildings, buildPropMeshes } = FL.BUILDING_MESHES;
+  const { buildFactionBuildings, buildPropMeshes, buildIconMeshes } = FL.BUILDING_MESHES;
 
   // Authentic RTS sprite-sheet cadence: 20 FPS animation (exact 60Hz/3) + 32 rotation stops (11.25° each)
   const ANIM_FPS = 20;
@@ -116,8 +116,10 @@
     uniform float uBuildProg;
     uniform float uHitFlash;
     uniform float uCharred;
+    uniform float uUnpowered;
     uniform float uHologram;
     uniform float uDestroy;
+    uniform vec3 uTint;
 
     varying vec3 vNorm;
     varying vec3 vCol;
@@ -149,7 +151,7 @@
 
       float groundAo = mix(0.78, 1.0, clamp(vHeightZ / 7.5, 0.0, 1.0));
       float ao = vAo * groundAo;
-      vec3 col = vCol;
+      vec3 col = vCol * uTint;
 
       if (vEm < 0.8) {
         float grain = (hash3(floor(vModelPos * 0.62)) - 0.5) * 0.085;
@@ -179,6 +181,9 @@
       if (uCharred > 0.5) {
         float g = dot(col, vec3(0.30, 0.59, 0.11));
         col = vec3(g * 0.34, g * 0.32, g * 0.30);
+      } else if (uUnpowered > 0.5) {
+        float g = dot(col, vec3(0.30, 0.59, 0.11));
+        col = mix(col, vec3(g * 0.78), 0.56) * 0.82;
       }
 
       if (uBuildProg < 0.999) {
@@ -294,7 +299,7 @@
       });
       [
         'uLocalMat', 'uEntityPos', 'uCamPos', 'uViewSize', 'uShadowPass',
-        'uDestroy', 'uZMin', 'uZMax', 'uAirBias', 'uBuildProg', 'uHitFlash', 'uCharred', 'uHologram'
+        'uDestroy', 'uZMin', 'uZMax', 'uAirBias', 'uBuildProg', 'uHitFlash', 'uCharred', 'uUnpowered', 'uHologram', 'uTint'
       ].forEach((k) => {
         this.eLoc[k] = gl.getUniformLocation(this.entProg, k);
       });
@@ -329,6 +334,10 @@
         })),
         rock: rawProps.rock.map((m) => this.uploadMesh(m))
       };
+
+      const rawIcons = buildIconMeshes();
+      this.icons = {};
+      for (const [k, m] of Object.entries(rawIcons)) this.icons[k] = this.uploadMesh(m);
 
       this.fbo = null; this.fboTex = null; this.fboDepth = null;
       this.fboW = 0; this.fboH = 0;
@@ -394,10 +403,12 @@
         buildProg: opts.buildProg ?? 1,
         hitFlash: opts.hitFlash ?? 0,
         charred: opts.charred ?? 0,
+        unpowered: opts.unpowered ?? 0,
         hologram: opts.hologram ?? 0,
         destroy: opts.destroy ?? 0,
         shadow: opts.shadow !== false,
-        airBias: opts.airBias ?? 0
+        airBias: opts.airBias ?? 0,
+        tint: opts.tint || null
       });
     }
 
@@ -549,7 +560,7 @@
       }
     }
 
-    enqueueBuilding(b, rawTime, hologram = 0) {
+    enqueueBuilding(b, rawTime, hologram = 0, unpowered = 0) {
       const M = this.buildings[b.faction] || this.buildings.neutral;
       const baseMesh = M[`bld_${b.kind}`];
       if (!baseMesh) return;
@@ -566,7 +577,7 @@
       const by = Math.round(b.y);
       const baseAng = b.facingRad !== undefined ? b.facingRad : 0;
       const opts = {
-        buildProg: bProg, hitFlash: (b.hitFlash || 0) > 0.1 ? 1 : 0, hologram, destroy: d,
+        buildProg: bProg, hitFlash: (b.hitFlash || 0) > 0.1 ? 1 : 0, unpowered, hologram, destroy: d,
         shadow: hologram === 0, zMin: baseMesh.minZ, zMax: baseMesh.maxZ
       };
       mat4TRS(this.mA, 0, 0, collapseZ, d * 0.14, -d * 0.12, baseAng, 1, 1, scaleZ);
@@ -594,14 +605,30 @@
       }
     }
 
+    enqueueWorldIcon(iconKind, wx, wy, rawTime, phaseOffset = 0) {
+      const ring = this.icons[`${iconKind}_ring`];
+      const head = this.icons[`${iconKind}_head`];
+      if (!ring || !head) return;
+      const time = snapTime(rawTime);
+      const bob = snapVal(Math.sin(time * 5.2 + phaseOffset) * 2.2, 4);
+      const spin = snapAngle(time * 2.4 + phaseOffset);
+      const opts = { shadow: false, airBias: 0.52, zMin: 0, zMax: 40 };
+      mat4TRS(this.mA, 0, 0, 12 + bob, 0, 0, 0);
+      this.pushPart(ring, this.mA, Math.round(wx), Math.round(wy), opts);
+      mat4TRS(this.mB, 0, 0, 12 + bob, 0, 0, spin);
+      this.pushPart(head, this.mB, Math.round(wx), Math.round(wy), opts);
+    }
+
     renderScene(vw, vh, sim, cam, shakeX, shakeY, hoverWorld) {
       const gl = this.gl;
       const zoom = cam.zoom;
       const viewW = vw / zoom;
       const viewH = vh / zoom;
       const pixelWorld = PIXEL_WORLD;
-      const worldW = (FL.CONSTANTS && FL.CONSTANTS.WORLD_WIDTH) || 2400;
-      const worldH = (FL.CONSTANTS && FL.CONSTANTS.WORLD_HEIGHT) || 1600;
+      const worldW = sim.worldW || (FL.CONSTANTS && FL.CONSTANTS.WORLD_WIDTH) || 2400;
+      const worldH = sim.worldH || (FL.CONSTANTS && FL.CONSTANTS.WORLD_HEIGHT) || 1600;
+      const biome = FL.MAPS ? FL.MAPS.getBiome(sim.currentMap && sim.currentMap.biome) : null;
+      const rockTint = (biome && biome.rockTint) || [1, 1, 1];
       const maxWorldTexW = Math.ceil((worldW + 360) / pixelWorld);
       const maxWorldTexH = Math.ceil((worldH + 360) / pixelWorld);
 
@@ -648,7 +675,7 @@
         if (!inVis(r.x, r.y)) continue;
         const sc = r.radius / 26;
         mat4TRS(this.mA, 0, 0, 0, 0, 0, r.variant * 1.1, sc, sc, sc);
-        this.pushPart(this.props.rock[r.variant], this.mA, Math.round(r.x), Math.round(r.y), {});
+        this.pushPart(this.props.rock[r.variant % this.props.rock.length], this.mA, Math.round(r.x), Math.round(r.y), { tint: rockTint });
       }
       for (const cp of sim.capturePoints) {
         if (!inVis(cp.x, cp.y)) continue;
@@ -664,15 +691,33 @@
         mat4TRS(this.mA, 0, 0, 0, 0.14, -0.08, snapAngle(w.hullAngle), 0.92, 0.92, 0.80);
         this.pushPart(mesh, this.mA, Math.round(w.x), Math.round(w.y), { charred: 1 });
       }
+      const { BUILDING_SPECS, UNIT_SPECS } = FL.CONSTANTS;
       for (const b of sim.buildings) {
         if (!inVis(b.x, b.y)) continue;
         if (b.faction !== sim.playerFaction && fog && !fog.isExplored(b.x, b.y)) continue;
-        this.enqueueBuilding(b, sim.elapsedTime, 0);
+        const unpowered = (b.koTimer <= 0 && b.buildProgress >= 1 && !sim.isBuildingPowered(b)) ? 1 : 0;
+        this.enqueueBuilding(b, sim.elapsedTime, 0, unpowered);
+        if (b.koTimer <= 0 && (b.faction === sim.playerFaction || !fog || fog.isVisible(b.x, b.y))) {
+          const bTop = b.y - BUILDING_SPECS[b.kind].radius - 26;
+          if (b.isRepairing && unpowered) {
+            this.enqueueWorldIcon('repair_field', b.x - 14, bTop - 4, sim.elapsedTime, b.id * 0.6);
+            this.enqueueWorldIcon('low_power', b.x + 14, bTop - 4, sim.elapsedTime, b.id * 0.6 + 1.2);
+          } else if (b.isRepairing) {
+            this.enqueueWorldIcon('repair_field', b.x, bTop - 4, sim.elapsedTime, b.id * 0.6);
+          } else if (unpowered) {
+            this.enqueueWorldIcon('low_power', b.x, bTop - 4, sim.elapsedTime, b.id * 0.6);
+          }
+        }
       }
       for (const u of sim.units) {
         if (!inVis(u.x, u.y)) continue;
         if (u.faction !== sim.playerFaction && fog && !fog.isVisible(u.x, u.y)) continue;
         this.enqueueUnit(u, sim.elapsedTime);
+        if (u.koTimer <= 0 && u.isRepairing) {
+          const uTop = u.y - UNIT_SPECS[u.kind].radius - 20;
+          const wy = uTop - (u.rank > 0 ? 7 : 3);
+          this.enqueueWorldIcon(u.repairKind === 'field' ? 'repair_field' : 'repair_auto', u.x, wy, sim.elapsedTime, u.id * 0.7);
+        }
       }
       if (sim.placementMode && hoverWorld) {
         const ok = sim.canPlaceBuilding(sim.playerFaction, sim.placementMode, hoverWorld.x, hoverWorld.y).ok;
@@ -734,7 +779,10 @@
         gl.uniform1f(L.uBuildProg, dc.buildProg);
         gl.uniform1f(L.uHitFlash, dc.hitFlash);
         gl.uniform1f(L.uCharred, dc.charred);
+        gl.uniform1f(L.uUnpowered, dc.unpowered);
         gl.uniform1f(L.uHologram, dc.hologram);
+        if (dc.tint) gl.uniform3f(L.uTint, dc.tint[0], dc.tint[1], dc.tint[2]);
+        else gl.uniform3f(L.uTint, 1, 1, 1);
         gl.drawArrays(gl.TRIANGLES, 0, dc.mesh.count);
       }
 
@@ -849,7 +897,9 @@
         gl.uniform1f(L.uBuildProg, 1);
         gl.uniform1f(L.uHitFlash, 0);
         gl.uniform1f(L.uCharred, 0);
+        gl.uniform1f(L.uUnpowered, 0);
         gl.uniform1f(L.uHologram, 0);
+        gl.uniform3f(L.uTint, 1, 1, 1);
         gl.drawArrays(gl.TRIANGLES, 0, dc.mesh.count);
       }
 
@@ -909,6 +959,157 @@
       }
       this._tmpCtx.putImageData(this._tmpImg, 0, 0);
       return this._tmpCanvas.toDataURL('image/png');
+    }
+
+    bakeMeshIcon(parts, opts = {}) {
+      const gl = this.gl;
+      const w = opts.width || 32;
+      const h = opts.height || 32;
+      const span = opts.span || 32;
+      const camX = opts.camX || 0;
+      const camY = opts.camY !== undefined ? opts.camY : -2.2;
+      const useShadow = opts.shadow !== false;
+
+      this.ensureFbo(w, h);
+      const uploaded = [];
+      this.drawCalls.length = 0;
+
+      for (const p of parts) {
+        const mesh = p.vbo ? p : this.uploadMesh(p.mesh || p);
+        if (!p.vbo) uploaded.push(mesh);
+        mat4TRS(
+          this.mA,
+          p.tx || 0, p.ty || 0, p.tz || 0,
+          p.rx || 0, p.ry || 0, p.rz || 0,
+          p.sx ?? 1, p.sy ?? 1, p.sz ?? 1
+        );
+        this.pushPart(mesh, this.mA, 0, 0, {
+          shadow: p.shadow !== undefined ? p.shadow : useShadow,
+          tint: p.tint || null,
+          zMin: p.zMin ?? mesh.minZ,
+          zMax: p.zMax ?? mesh.maxZ
+        });
+      }
+
+      const aspect = w / h;
+      const viewH = span;
+      const viewW = viewH * aspect;
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clearDepth(1.0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      gl.useProgram(this.entProg);
+      const L = this.eLoc;
+      gl.enableVertexAttribArray(L.aPos);
+      gl.enableVertexAttribArray(L.aNorm);
+      gl.enableVertexAttribArray(L.aCol);
+      gl.enableVertexAttribArray(L.aEm);
+      gl.enableVertexAttribArray(L.aMat);
+      gl.enableVertexAttribArray(L.aAo);
+      gl.uniform2f(L.uCamPos, camX, camY);
+      gl.uniform2f(L.uViewSize, viewW, viewH);
+
+      gl.depthFunc(gl.LESS);
+      gl.uniform1f(L.uShadowPass, 1.0);
+      for (let i = 0; i < this.drawCalls.length; i++) {
+        const dc = this.drawCalls[i];
+        if (!dc.shadow) continue;
+        this.bindMesh(dc.mesh);
+        gl.uniformMatrix4fv(L.uLocalMat, false, dc.mat);
+        gl.uniform2f(L.uEntityPos, dc.ex, dc.ey);
+        gl.uniform1f(L.uDestroy, 0);
+        gl.uniform1f(L.uZMin, dc.zMin);
+        gl.uniform1f(L.uZMax, dc.zMax);
+        gl.uniform1f(L.uAirBias, 0);
+        gl.uniform1f(L.uBuildProg, 1);
+        gl.drawArrays(gl.TRIANGLES, 0, dc.mesh.count);
+      }
+
+      gl.depthFunc(gl.LEQUAL);
+      gl.uniform1f(L.uShadowPass, 0.0);
+      for (let i = 0; i < this.drawCalls.length; i++) {
+        const dc = this.drawCalls[i];
+        this.bindMesh(dc.mesh);
+        gl.uniformMatrix4fv(L.uLocalMat, false, dc.mat);
+        gl.uniform2f(L.uEntityPos, dc.ex, dc.ey);
+        gl.uniform1f(L.uDestroy, 0);
+        gl.uniform1f(L.uZMin, dc.zMin);
+        gl.uniform1f(L.uZMax, dc.zMax);
+        gl.uniform1f(L.uAirBias, 0);
+        gl.uniform1f(L.uBuildProg, 1);
+        gl.uniform1f(L.uHitFlash, 0);
+        gl.uniform1f(L.uCharred, 0);
+        gl.uniform1f(L.uUnpowered, 0);
+        gl.uniform1f(L.uHologram, 0);
+        if (dc.tint) gl.uniform3f(L.uTint, dc.tint[0], dc.tint[1], dc.tint[2]);
+        else gl.uniform3f(L.uTint, 1, 1, 1);
+        gl.drawArrays(gl.TRIANGLES, 0, dc.mesh.count);
+      }
+
+      gl.disableVertexAttribArray(L.aPos);
+      gl.disableVertexAttribArray(L.aNorm);
+      gl.disableVertexAttribArray(L.aCol);
+      gl.disableVertexAttribArray(L.aEm);
+      gl.disableVertexAttribArray(L.aMat);
+      gl.disableVertexAttribArray(L.aAo);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, w, h);
+      gl.disable(gl.DEPTH_TEST);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.useProgram(this.postProg);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.fboTex);
+      gl.uniform1i(this.pLoc.uTex, 0);
+      gl.uniform2f(this.pLoc.uTexel, 1 / w, 1 / h);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.quadVbo);
+      gl.enableVertexAttribArray(this.pLoc.aQuad);
+      gl.vertexAttribPointer(this.pLoc.aQuad, 2, gl.FLOAT, false, 0, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disableVertexAttribArray(this.pLoc.aQuad);
+
+      const readBuf = new Uint8Array(w * h * 4);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, readBuf);
+
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = w;
+      tmpCanvas.height = h;
+      const tmpCtx = tmpCanvas.getContext('2d');
+      const tmpImg = tmpCtx.createImageData(w, h);
+      const dst = tmpImg.data;
+      for (let y = 0; y < h; y++) {
+        const sy = h - 1 - y;
+        for (let x = 0; x < w; x++) {
+          const si = (sy * w + x) * 4;
+          const di = (y * w + x) * 4;
+          const a = readBuf[si + 3];
+          if (a === 0) {
+            dst[di] = dst[di + 1] = dst[di + 2] = dst[di + 3] = 0;
+          } else if (a === 255) {
+            dst[di] = readBuf[si]; dst[di + 1] = readBuf[si + 1]; dst[di + 2] = readBuf[si + 2]; dst[di + 3] = 255;
+          } else {
+            const inv = 255 / a;
+            dst[di] = Math.min(255, Math.round(readBuf[si] * inv));
+            dst[di + 1] = Math.min(255, Math.round(readBuf[si + 1] * inv));
+            dst[di + 2] = Math.min(255, Math.round(readBuf[si + 2] * inv));
+            dst[di + 3] = a;
+          }
+        }
+      }
+      tmpCtx.putImageData(tmpImg, 0, 0);
+
+      for (const m of uploaded) gl.deleteBuffer(m.vbo);
+      this.drawCalls.length = 0;
+      return tmpCanvas.toDataURL('image/png');
     }
 
     bakeAllPortraits() {

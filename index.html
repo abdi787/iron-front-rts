@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>IRON FRONT // Red Dominion vs Olive Vanguard RTS</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=20261128a" />
 </head>
 <body class="fac-red">
   <div id="app" class="app">
@@ -14,7 +14,9 @@
     <div id="titleScreen" class="title-screen">
       <div class="title-scrim"></div>
       <div class="title-top">
+        <a href="editor.html" class="mech-btn brass" style="text-decoration:none;">Редактор карт</a>
         <a href="showcase.html" class="mech-btn" style="text-decoration:none;">Шоукейс (16)</a>
+        <a href="docs.html" class="mech-btn" style="text-decoration:none;">Доки</a>
         <button id="titleFullscreenBtn" class="mech-btn icon-only" title="На весь экран">⛶</button>
       </div>
 
@@ -52,6 +54,20 @@
             <div class="fac-preview" id="greenCardPreview"></div>
             <small>Хамви, БТР 8×8, Ракета, Циклоп, Ион</small>
           </button>
+        </div>
+
+        <!-- Map / Sector Selector -->
+        <div class="map-block">
+          <div class="map-head">
+            <div class="diff-label">СЕКТОР БОЯ <span class="map-selected-meta" id="mapSelectedMeta"></span></div>
+            <div class="map-head-actions">
+              <button type="button" id="importMapBtn" class="mech-btn tiny" title="Загрузить карту из JSON-файла">+ JSON</button>
+              <a id="editSelectedMapLink" href="editor.html" class="mech-btn tiny" style="text-decoration:none;" title="Открыть выбранную карту в редакторе">Править</a>
+              <input type="file" id="importMapInput" accept=".json,application/json" hidden />
+            </div>
+          </div>
+          <div class="map-strip" id="mapSelectStrip" role="listbox" aria-label="Выбор карты"></div>
+          <div class="map-desc" id="mapSelectedDesc"></div>
         </div>
 
         <div class="diff-block">
@@ -228,15 +244,18 @@
     </div>
   </div>
 
-  <script src="js/mesh_core.js"></script>
-  <script src="js/units_meshes.js"></script>
-  <script src="js/buildings_meshes.js"></script>
-  <script src="js/sim.js"></script>
-  <script src="js/renderer3d.js"></script>
-  <script src="js/fog.js"></script>
-  <script src="js/particles.js"></script>
-  <script src="js/sound.js"></script>
-  <script src="js/renderer.js"></script>
-  <script src="js/main.js"></script>
+  <script src="js/maps.js?v=20261128a"></script>
+  <script src="js/maps_builtin.js?v=20261128a"></script>
+  <script src="js/mesh_core.js?v=20261128a"></script>
+  <script src="js/units_meshes.js?v=20261128a"></script>
+  <script src="js/buildings_meshes.js?v=20261128a"></script>
+  <script src="js/sim.js?v=20261128b"></script>
+  <script src="js/renderer3d.js?v=20261128b"></script>
+  <script src="js/cursors.js?v=20261128c"></script>
+  <script src="js/fog.js?v=20261128b"></script>
+  <script src="js/particles.js?v=20261128b"></script>
+  <script src="js/sound.js?v=20261128b"></script>
+  <script src="js/renderer.js?v=20261128b"></script>
+  <script src="js/main.js?v=20261128b"></script>
 </body>
 </html>

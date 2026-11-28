@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const FL = (window.FRONTLINE = window.FRONTLINE || {});
-  const { MeshBuilder, RED_PAL, NEUTRAL_PAL, addInsigniaSide } = FL.MESH_CORE;
+  const { MeshBuilder, RED_PAL, NEUTRAL_PAL, addInsigniaSide, addTransformed } = FL.MESH_CORE;
 
   // =========================================================================
   // DIESELPUNK MILITARY BASE BUILDINGS & DESERT PROPS
@@ -276,5 +276,45 @@
     return P;
   }
 
-  FL.BUILDING_MESHES = { buildFactionBuildings, buildPropMeshes };
+  function buildIconMeshes() {
+    const I = {};
+
+    // Low-Power: Crimson halo ring + chunky spinning 3D golden lightning bolt
+    {
+      const ring = new MeshBuilder();
+      ring.torusZ(0, 0, 1.8, 9.2, 1.45, 10, 6, [0.92, 0.20, 0.16], 0.55, 4);
+      I.low_power_ring = ring.finish();
+
+      const bolt = new MeshBuilder();
+      bolt.wedge(-2.0, 0, 2.5, 1.4, 2.8, 5.4, 4.2, 11.0, [1.00, 0.88, 0.22], 0.65, 4.8, 4, 0.85, 1.0);
+      bolt.box(0.0, 0, 13.0, 8.8, 4.4, 3.2, [1.00, 0.90, 0.28], 0.68, 4, 0.88, 1.0);
+      bolt.wedge(-1.6, 0, 13.8, 5.4, 4.2, 3.2, 3.4, 10.8, [1.00, 0.92, 0.34], 0.70, 4.6, 4, 0.88, 1.0);
+      I.low_power_head = bolt.finish();
+    }
+
+    // Helper for spinning 3D repair wrench icons (field/building amber vs veteran auto green)
+    const buildWrenchIcon = (prefix, ringCol, handleCol, headCol) => {
+      const ring = new MeshBuilder();
+      ring.torusZ(0, 0, 1.8, 9.0, 1.35, 10, 6, ringCol, 0.55, 4);
+      I[`${prefix}_ring`] = ring.finish();
+
+      const raw = new MeshBuilder();
+      raw.cylY(0, -1.9, -8.4, 2.6, 2.6, 3.8, 8, headCol, 0.35, 4);
+      raw.bevelBox(0, 0, -2.0, 3.6, 3.6, 11.4, 0.5, handleCol, 0.45, 4, 0.84, 1.0);
+      raw.bevelBox(0, 0, 4.4, 6.2, 4.0, 2.6, 0.5, headCol, 0.40, 4, 0.86, 1.0);
+      raw.wedge(-2.7, 0, 5.0, 2.6, 4.0, 2.0, 3.8, 6.0, headCol, 0.40, -0.8, 4, 0.88, 1.0);
+      raw.wedge(2.7, 0, 5.0, 2.6, 4.0, 2.0, 3.8, 6.0, headCol, 0.40, 0.8, 4, 0.88, 1.0);
+
+      const tilted = new MeshBuilder();
+      addTransformed(tilted, raw, 0, 0, 13.5, 0, -0.44, 0);
+      I[`${prefix}_head`] = tilted.finish();
+    };
+
+    buildWrenchIcon('repair_field', [0.96, 0.76, 0.18], [0.95, 0.74, 0.20], [0.88, 0.90, 0.94]);
+    buildWrenchIcon('repair_auto', [0.22, 0.88, 0.58], [0.24, 0.84, 0.56], [0.76, 0.98, 0.88]);
+
+    return I;
+  }
+
+  FL.BUILDING_MESHES = { buildFactionBuildings, buildPropMeshes, buildIconMeshes };
 })();

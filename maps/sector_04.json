@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "id": "sector-04",
+  "code": "СЕК-04",
+  "name": "Сектор-04: Перекрёсток",
+  "author": "IRON FRONT",
+  "description": "Классический фронт с диагональной конвойной трассой, тремя нефтевышками и богатым центральным складом.",
+  "size": { "w": 2400, "h": 1600 },
+  "biome": "steppe",
+  "seed": 4201,
+  "symmetry": "point",
+  "autoMirror": false,
+  "spawns": [
+    {
+      "slot": "player",
+      "x": 360,
+      "y": 1240,
+      "facing": 0,
+      "pad": { "x": 420, "y": 1220, "w": 368, "h": 268 }
+    },
+    {
+      "slot": "enemy",
+      "x": 2040,
+      "y": 360,
+      "facing": 2,
+      "pad": { "x": 1980, "y": 380, "w": 368, "h": 268 }
+    }
+  ],
+  "pads": [],
+  "roads": [
+    {
+      "width": 60,
+      "smooth": true,
+      "points": [
+        [360, 1240],
+        [840, 1040],
+        [1200, 800],
+        [1560, 560],
+        [2040, 360]
+      ]
+    }
+  ],
+  "supplyClusters": [
+    { "x": 250, "y": 960, "count": 6, "amount": 850, "pattern": "standard" },
+    { "x": 2150, "y": 640, "count": 6, "amount": 850, "pattern": "standard" },
+    { "x": 720, "y": 280, "count": 5, "amount": 1000, "pattern": "standard" },
+    { "x": 1680, "y": 1320, "count": 5, "amount": 1000, "pattern": "standard" },
+    { "x": 1200, "y": 800, "count": 4, "amount": 1200, "pattern": "standard" }
+  ],
+  "supplyNodes": [],
+  "capturePoints": [
+    { "x": 760, "y": 560, "radius": 74, "rate": 10 },
+    { "x": 1200, "y": 800, "radius": 74, "rate": 10 },
+    { "x": 1640, "y": 1040, "radius": 74, "rate": 10 }
+  ],
+  "obstacles": [
+    { "kind": "rock", "x": 920, "y": 440, "radius": 32, "variant": 0 },
+    { "kind": "rock", "x": 975, "y": 470, "radius": 26, "variant": 1 },
+    { "kind": "rock", "x": 1025, "y": 435, "radius": 24, "variant": 2 },
+    { "kind": "rock", "x": 1480, "y": 1160, "radius": 32, "variant": 0 },
+    { "kind": "rock", "x": 1425, "y": 1130, "radius": 26, "variant": 1 },
+    { "kind": "rock", "x": 1375, "y": 1165, "radius": 24, "variant": 2 },
+    { "kind": "rock", "x": 840, "y": 880, "radius": 30, "variant": 0 },
+    { "kind": "rock", "x": 888, "y": 915, "radius": 24, "variant": 2 },
+    { "kind": "rock", "x": 1560, "y": 720, "radius": 30, "variant": 0 },
+    { "kind": "rock", "x": 1512, "y": 685, "radius": 24, "variant": 2 },
+    { "kind": "rock", "x": 540, "y": 620, "radius": 26, "variant": 1 },
+    { "kind": "rock", "x": 1860, "y": 980, "radius": 26, "variant": 1 },
+    { "kind": "rock", "x": 1190, "y": 250, "radius": 28, "variant": 0 },
+    { "kind": "rock", "x": 1210, "y": 1350, "radius": 28, "variant": 0 }
+  ]
+}

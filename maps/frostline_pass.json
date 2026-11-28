@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "id": "frostline-pass",
+  "code": "СЕВ-12",
+  "name": "Ледяной рубеж",
+  "author": "IRON FRONT",
+  "description": "Снежный перевал Запад–Восток: центральная горная гряда делит фронт на три прохода с обходными флангами.",
+  "size": { "w": 2600, "h": 1600 },
+  "biome": "tundra",
+  "seed": 7319,
+  "symmetry": "x",
+  "autoMirror": true,
+  "spawns": [
+    {
+      "slot": "player",
+      "x": 320,
+      "y": 800,
+      "facing": 0,
+      "pad": { "x": 350, "y": 800, "w": 368, "h": 280 }
+    }
+  ],
+  "pads": [
+    { "x": 1300, "y": 800, "w": 240, "h": 200 }
+  ],
+  "roads": [
+    {
+      "width": 56,
+      "smooth": true,
+      "points": [
+        [320, 800],
+        [720, 420],
+        [1300, 340],
+        [1880, 420],
+        [2280, 800]
+      ]
+    },
+    {
+      "width": 56,
+      "smooth": true,
+      "points": [
+        [320, 800],
+        [720, 1180],
+        [1300, 1260],
+        [1880, 1180],
+        [2280, 800]
+      ]
+    },
+    {
+      "width": 44,
+      "smooth": false,
+      "points": [
+        [320, 800],
+        [1300, 800],
+        [2280, 800]
+      ]
+    }
+  ],
+  "supplyClusters": [
+    { "x": 270, "y": 460, "count": 6, "amount": 850, "pattern": "standard" },
+    { "x": 640, "y": 1320, "count": 5, "amount": 950, "pattern": "standard" },
+    { "x": 1300, "y": 180, "count": 4, "amount": 1150, "pattern": "line" },
+    { "x": 1300, "y": 1420, "count": 4, "amount": 1150, "pattern": "line" }
+  ],
+  "supplyNodes": [],
+  "capturePoints": [
+    { "x": 1300, "y": 340, "radius": 74, "rate": 10 },
+    { "x": 1300, "y": 800, "radius": 78, "rate": 12 },
+    { "x": 1300, "y": 1260, "radius": 74, "rate": 10 }
+  ],
+  "obstacles": [
+    { "kind": "rock", "x": 1090, "y": 560, "radius": 34, "variant": 0 },
+    { "kind": "rock", "x": 1160, "y": 595, "radius": 30, "variant": 1 },
+    { "kind": "rock", "x": 1230, "y": 570, "radius": 28, "variant": 2 },
+    { "kind": "rock", "x": 1090, "y": 1040, "radius": 34, "variant": 1 },
+    { "kind": "rock", "x": 1160, "y": 1005, "radius": 30, "variant": 2 },
+    { "kind": "rock", "x": 1230, "y": 1030, "radius": 28, "variant": 0 },
+    { "kind": "rock", "x": 760, "y": 640, "radius": 28, "variant": 0 },
+    { "kind": "rock", "x": 760, "y": 960, "radius": 28, "variant": 2 },
+    { "kind": "rock", "x": 950, "y": 240, "radius": 26, "variant": 1 },
+    { "kind": "rock", "x": 950, "y": 1360, "radius": 26, "variant": 0 }
+  ]
+}

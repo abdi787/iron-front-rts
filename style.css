@@ -106,6 +106,7 @@ html, body {
   box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.75);
 }
 .mech-btn.small { padding: 4px 7px; font-size: 10px; min-height: 27px; }
+.mech-btn.tiny { padding: 2px 7px; font-size: 9px; min-height: 21px; }
 .mech-btn.icon-only { width: 34px; height: 34px; font-size: 15px; padding: 0; }
 .mech-btn.active {
   background: linear-gradient(180deg, var(--fac) 0%, var(--fac-dark) 100%);
@@ -164,9 +165,20 @@ html, body {
 .title-hero {
   position: relative;
   z-index: 2;
-  max-width: 560px;
+  max-width: 600px;
   margin: auto 0;
   pointer-events: auto;
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
+  padding-right: 4px;
+  --scrollbar-thumb: #6d6354;
+  --scrollbar-track: #181410;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+@supports not (scrollbar-color: auto) {
+  .title-hero::-webkit-scrollbar { width: 10px; }
+  .title-hero::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+  .title-hero::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 }
 
 .title-badge {
@@ -237,6 +249,123 @@ html, body {
   object-fit: contain;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+.map-block { margin-bottom: 10px; }
+.map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+}
+.map-head .diff-label { margin-bottom: 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.map-selected-meta { color: var(--brass); font-weight: 800; letter-spacing: 0.04em; }
+.map-head-actions { display: flex; align-items: center; gap: 4px; }
+
+.map-strip {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding: 2px 1px 6px;
+  --scrollbar-thumb: #7b6f5e;
+  --scrollbar-track: #14110d;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+@supports not (scrollbar-color: auto) {
+  .map-strip::-webkit-scrollbar { height: 10px; }
+  .map-strip::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+  .map-strip::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+}
+
+.map-card {
+  appearance: none;
+  flex: 0 0 116px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 2px solid #12100d;
+  background: linear-gradient(180deg, #433c33 0%, #2a241e 65%, #1d1914 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.2), 0 3px 8px rgba(0, 0, 0, 0.55);
+  transition: border-color 0.1s, transform 0.06s;
+}
+.map-card:hover { border-color: #7c6f5c; }
+.map-card:active { transform: translateY(1px); }
+.map-card.active {
+  border-color: var(--brass);
+  box-shadow: inset 0 1px 0 rgba(255, 245, 224, 0.3), 0 0 10px rgba(235, 184, 58, 0.42);
+}
+
+.map-thumb-wrap {
+  position: relative;
+  width: 100%;
+  height: 62px;
+  background: var(--lcd-bg);
+  border: 1px solid #100e0b;
+  border-radius: 2px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.map-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+.map-biome-pill {
+  position: absolute;
+  left: 2px;
+  bottom: 2px;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: rgba(12, 10, 8, 0.84);
+  color: #f4ead6;
+  border: 1px solid rgba(255, 245, 224, 0.18);
+}
+.map-src-pill {
+  position: absolute;
+  right: 2px;
+  top: 2px;
+  font-size: 7px;
+  font-weight: 900;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: rgba(235, 184, 58, 0.92);
+  color: #16120d;
+}
+.map-card-name {
+  font-size: 9px;
+  font-weight: 900;
+  color: #f3e8d2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-card-sub {
+  font-size: 8px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.map-desc {
+  font-size: 10px;
+  color: #c2b6a0;
+  line-height: 1.35;
+  min-height: 14px;
+  margin-top: 2px;
 }
 
 .diff-block { margin-bottom: 12px; }
@@ -847,6 +976,7 @@ html, body {
   transition: opacity 0.12s;
 }
 .cameo-hbar.on { opacity: 1; border-color: rgba(235, 184, 58, 0.65); }
+.builds-sec .cameo-hbar { visibility: hidden; }
 .cameo-hbar.paused { border-color: #ef4444; }
 .cameo-hbar-fill {
   height: 100%;

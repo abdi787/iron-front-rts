@@ -88,6 +88,8 @@
       <div class="nav-links">
         <button id="copyBriefBtn" class="btn primary" type="button">Copy AI Agent Brief</button>
         <a class="btn" href="index.html">Play Game</a>
+        <a class="btn" href="editor.html">Map Maker</a>
+        <a class="btn" href="index.html?cursors=1">Cursor Sheet (20)</a>
         <a class="btn" href="showcase.html">16-Unit Showcase</a>
       </div>
     </div>
@@ -110,16 +112,24 @@ Repo / Dir: /Users/abdi04/iron-front-rts (GitHub: abdi787/iron-front-rts, Pages 
 Stack: Pure vanilla HTML5 + CSS + WebGL 1 + Canvas2D + Web Audio API. Zero npm/bundler/external deps.
 Namespace: Every runtime JS file is an IIFE attaching exports onto window.FRONTLINE (FL).
 Load Order (index.html):
-  1. js/mesh_core.js       -> FL.MESH_CORE (MeshBuilder, RED_PAL, GREEN_PAL, NEUTRAL_PAL, part helpers)
-  2. js/units_meshes.js    -> FL.UNIT_MESHES.buildUnitMeshes() (16 procedural vehicles)
-  3. js/buildings_meshes.js-> FL.BUILDING_MESHES.{buildFactionBuildings, buildPropMeshes} (8 blds + modular props)
-  4. js/sim.js             -> FL.CONSTANTS, FL.RtsSimulation (headless fixed-cap dt <= 0.05s RTS engine)
-  5. js/renderer3d.js      -> FL.Pixel3DRenderer (2-pass WebGL->FBO->outline shader + portrait baker)
-  6. js/fog.js             -> FL.FogOfWar (32px tile visibility/explored texture)
-  7. js/particles.js       -> FL.EffectsPool (particles, beams, rings, decals, floating texts)
-  8. js/sound.js           -> FL.SoundEngine (procedural Web Audio SFX)
-  9. js/renderer.js        -> FL.GameRenderer (terrain bake, world Canvas2D + WebGL FBO blit, world bars, minimap)
- 10. js/main.js            -> boot() (DOM bindings, mouse edge-pan, camera pan/zoom, pointer/touch/keys, 0.09s HUD sync)
+  1. js/maps.js            -> FL.MAPS (schema v1, 5 biomes, symmetry/autoMirror expander, BFS validator, localStorage/manifest)
+  2. js/maps_builtin.js    -> Sync built-in fallback registry generated from maps/manifest.json + maps/*.json
+  3. js/mesh_core.js       -> FL.MESH_CORE (MeshBuilder, RED_PAL, GREEN_PAL, NEUTRAL_PAL, part helpers)
+  4. js/units_meshes.js    -> FL.UNIT_MESHES.buildUnitMeshes() (16 procedural vehicles)
+  5. js/buildings_meshes.js-> FL.BUILDING_MESHES.{buildFactionBuildings, buildPropMeshes, buildIconMeshes}
+  6. js/sim.js             -> FL.CONSTANTS, FL.RtsSimulation (headless fixed-cap dt <= 0.05s RTS engine, dynamic worldW/worldH, relative AI)
+  7. js/renderer3d.js      -> FL.Pixel3DRenderer (2-pass WebGL->FBO->outline shader, biome rock uTint, portrait & 32px cursor baker)
+  8. js/cursors.js         -> FL.CursorSystem (procedural 3D->Pixel hardware CSS cursors: faction pointer, UI, select, move, attack, harvest, rally, build ok/bad, recon, strike, 8-dir edge-pan)
+  9. js/fog.js             -> FL.FogOfWar (dynamic 32px tile visibility/explored texture with resize())
+ 10. js/particles.js       -> FL.EffectsPool (particles, beams, rings, decals, floating texts)
+ 11. js/sound.js           -> FL.SoundEngine (procedural Web Audio SFX)
+ 12. js/renderer.js        -> FL.GameRenderer (biome/road/pad terrain bake, world compositing, minimap + renderMapThumbnail)
+ 13. js/main.js            -> boot() (map selector + JSON import, ?map= param, contextual cursors, DOM bindings, camera pan/zoom, HUD sync)
+
+Map System & Editor:
+  - Maps live in maps/*.json listed in maps/manifest.json (5 official maps across biomes: steppe, desert, tundra, ashland, marsh).
+  - Map Maker: editor.html + editor.css + js/editor.js (WYSIWYG editor reusing real Pixel3DRenderer + GameRenderer, live symmetry, BFS validator, localStorage library, Test-Play via ?map=draft, JSON import/export).
+  - CLI Validator: `node scripts/validate_maps.mjs [file.json]` (or `--sync-builtin` to refresh js/maps_builtin.js).
 
 Critical Invariants (DO NOT BREAK):
 - Render cadence: ANIM_FPS = 20, ANGLE_STOPS = 32 (11.25 deg step) in js/renderer3d.js.
@@ -130,7 +140,10 @@ Critical Invariants (DO NOT BREAK):
 - C&C Power Rules: recomputePower() counts both powerProduced and powerConsumed ONLY for completed living buildings (buildProgress >= 1). Construction continues during low power. On isLowPower(), motorpool queues pause, bunker/heavyGun turrets stop firing, workshop stops healing, command radar stops & artilleryBarrage locks ("Нет ⚡"), while hq/generator/depot (dropoff + harvester queue) stay active to prevent softlocks.
 - Kill-Based Veterancy: Ranks 0..3 unlock at 0/1/2/3 last-hit kills of enemy combat units (buildings & harvesters excluded).
 - Progressive Supply Piles: buildPropMeshes() outputs { base, items[6] } per variant so crates/drums vanish step-by-step from the full-sized pallet instead of scaling down.
-- World Status Bars (renderer.js): Construction/unit-queue/spawn/repair horizontal progress bars render directly BENEATH buildings (bBot) and units (uBot); HP + animated repair wrench (drawRepairBadge) + low-power icon (drawLowPowerBadge) render ABOVE entities.
+- Building Tech Tree & Power Gating: Without a completed depot, only generator and depot can be built; motorpool/bunker/workshop require depot; command requires motorpool (and depot); heavyGun requires command. Only once the grid is actually in Low Power (isLowPower: completed powerConsumed > powerProduced, matching the HUD gauge) are energy-dependent buildings (powerDelta < 0) blocked until generators restore power; buildings still under construction do not pre-lock cards.
+- World Status Bars & Badges (renderer.js + renderer3d.js): Construction/unit-queue/spawn horizontal progress bars render directly BENEATH buildings (bBot) and units (uBot); building repair shows ONLY the HP bar + spinning 3D pixel-art wrench icon above (no duplicate bottom repair bar). Unpowered completed buildings tint slightly greyed-out via uUnpowered and display a spinning 3D pixel-art ⚡ icon (enqueueWorldIcon in renderer3d.js, meshes from buildIconMeshes in buildings_meshes.js). Placement ghosts visualize rectangular AABB clearance boundaries (getBuildingClearanceRect / getPropClearanceRect / rectsOverlap in sim.js + renderer.js) + base build radius + failure reason.
+- Dynamic Multi-Map & Relative AI: Never hardcode WORLD_WIDTH/WORLD_HEIGHT (2400x1600) or SW/NE coordinates inside gameplay/render loops. Always read sim.worldW/sim.worldH, sim.playerSpawn/enemySpawn, and sim.currentMap. Enemy AI placement in updateEnemyAi() expands relative to its HQ & nearest supply cluster with spiral fallback.
+- 3D->Pixel Hardware Cursors (js/cursors.js + renderer3d.js): All 20 cursors (faction pointers, UI brass pointer, select/move/attack/harvest/rally/build_ok/build_bad/recon/strike, and 8-direction edge-pan arrows) are procedural 3D meshes baked via bakeMeshIcon() into 32x32 PNG data URLs injected as CSS cursor: url(...). Edge-pan applies body[data-edge-cursor="pan_*"] so arrows stay active at viewport rims; resolveGameCursor() MUST respect FogOfWar so enemy/supply cursors never leak unrevealed entities. Inspect all 20 cursors & hotspots live at index.html?cursors=1.
 - showcase.html (1,334 lines) is standalone & inline-duplicates meshes/shaders rather than importing js/*.js.</pre>
   </section>
 
@@ -141,19 +154,25 @@ Critical Invariants (DO NOT BREAK):
         <tr><th>File</th><th>Lines</th><th>Exports / DOM Role</th><th>Key Responsibilities</th></tr>
       </thead>
       <tbody>
-        <tr><td><code>index.html</code></td><td>242</td><td>Title + HUD + Footer Dock + Modal</td><td>Loads all 10 scripts sequentially; contains <code>#rotateModeBtn</code>, <code>#modeBanner</code>, <code>#selectionBar</code>, <code>#unitSecPlate</code>, <code>#unitDock</code>, <code>#buildDock</code>.</td></tr>
-        <tr><td><code>style.css</code></td><td>959</td><td>Riveted steel skeuomorphic UI</td><td>Cameo cards (<code>.cameo-card</code>, <code>.cameo-hbar</code>, <code>.dock-hint</code>), responsive layout breakpoints (1240 / 860 / 580px), CSS animations (<code>wrenchRock</code>, <code>pwrCardPulse</code>, <code>offlineBlink</code>).</td></tr>
+        <tr><td><code>index.html</code></td><td>261</td><td>Title + Map Picker + HUD</td><td>Loads all 13 runtime scripts; title screen includes live-preview map selector, JSON import, and links to <code>editor.html</code>, <code>showcase.html</code>, and <code>docs.html</code>.</td></tr>
+        <tr><td><code>editor.html</code> / <code>editor.css</code></td><td>280 / 753</td><td>WYSIWYG Map Maker</td><td>Visual map editor using real <code>Pixel3DRenderer</code> + <code>GameRenderer</code>, live mirror symmetry, BFS validator, and native <code>&lt;dialog closedby="any"&gt;</code> JSON exchange modal.</td></tr>
+        <tr><td><code>maps/*.json</code> + <code>manifest.json</code></td><td>5 maps</td><td>Official JSON Maps</td><td>Declarative <code>schemaVersion: 1</code> sectors: <code>sector_04</code>, <code>frostline_pass</code>, <code>dune_citadel</code>, <code>ash_foundry</code>, <code>marsh_delta</code>.</td></tr>
+        <tr><td><code>js/maps.js</code> / <code>js/maps_builtin.js</code></td><td>1074 / 1000</td><td><code>FL.MAPS</code> (Browser + Node)</td><td>5 biomes, <code>normalizeMap</code>, <code>expandMap</code> (with <code>autoMirror</code>), <code>validateMap</code> (clearance + build slots + 48px BFS reachability), <code>localStorage</code> + manifest loader, offline fallback.</td></tr>
+        <tr><td><code>js/editor.js</code></td><td>1721</td><td>Map Maker Controller</td><td>Tools (Select, HQ, Supplies, Outpost, Rock brush, Road polyline, Pad, Erase), Undo/Redo, live mirror editing, Test-Play draft launcher (<code>?map=draft</code>), and 3D cursor binding.</td></tr>
+        <tr><td><code>scripts/validate_maps.mjs</code></td><td>91</td><td>Node CLI Linter</td><td>Validates manifest or individual map JSON files via <code>js/maps.js</code> and syncs <code>js/maps_builtin.js</code> via <code>--sync-builtin</code>.</td></tr>
+        <tr><td><code>style.css</code></td><td>1150</td><td>Riveted steel skeuomorphic UI</td><td>Title map-strip cards, cameo cards (<code>.cameo-card</code>, <code>.cameo-hbar</code>, <code>.dock-hint</code>), responsive breakpoints (1240 / 860 / 580px), CSS animations (<code>wrenchRock</code>, <code>pwrCardPulse</code>, <code>offlineBlink</code>).</td></tr>
         <tr><td><code>showcase.html</code></td><td>1334</td><td>Standalone 16-Unit Inspector</td><td>Self-contained 3D vs Pixel Art split-screen viewer (<code>Low..Max</code> FBO presets, <code>20fps·32</code> vs <code>60fps</code> toggle, slice/build slider). Does not load <code>js/*.js</code>.</td></tr>
         <tr><td><code>js/mesh_core.js</code></td><td>414</td><td><code>FL.MESH_CORE</code></td><td>12-float vertex <code>MeshBuilder</code> (<code>wedge</code>, <code>bevelBox</code>, <code>bevelWedge</code>, <code>box</code>, <code>cylZ/X/Y</code>, <code>torusZ</code>, <code>sphere</code>, <code>dish</code>), palettes, <code>addWheel</code>, <code>addTrackPod</code>, <code>addCanvasTarp</code>.</td></tr>
         <tr><td><code>js/units_meshes.js</code></td><td>504</td><td><code>FL.UNIT_MESHES</code></td><td><code>buildUnitMeshes()</code> generates <code>_hull</code>, <code>_turret</code>, <code>_barrel</code>, <code>_orb</code> VBO data for 8 Red + 8 Green vehicles.</td></tr>
-        <tr><td><code>js/buildings_meshes.js</code></td><td>280</td><td><code>FL.BUILDING_MESHES</code></td><td><code>buildFactionBuildings(pal, fk)</code> for 8 buildings + turret/dish heads + oil <code>outpost</code>; <code>buildPropMeshes()</code> for modular <code>{ base, items[6] }</code> supply pallets &amp; rocks.</td></tr>
-        <tr><td><code>js/sim.js</code></td><td>1794</td><td><code>FL.CONSTANTS</code>, <code>FL.RtsSimulation</code></td><td>Game state, HQ-only start, specs, AI profiles, depot-only supply &amp; per-building <code>queueUnit</code>, steering/collision, harvesting/salvage, weapons, C&amp;C power rules, repair flags, <code>1/2/3</code> kill veterancy, victory checks.</td></tr>
-        <tr><td><code>js/renderer3d.js</code></td><td>944</td><td><code>FL.Pixel3DRenderer</code></td><td>2-pass WebGL renderer: geometry+shadow pass into <code>RGBA+DEPTH16</code> FBO + height-contour outline post-pass + progressive supply-item rendering + startup portrait PNG baker (<code>bakeAllPortraits</code>).</td></tr>
-        <tr><td><code>js/fog.js</code></td><td>123</td><td><code>FL.FogOfWar</code></td><td><code>75×50</code> grid (<code>FOG_TILE = 32</code>) updated per step from player unit/building sight and active radar scans; writes <code>Uint32Array</code> canvas texture.</td></tr>
+        <tr><td><code>js/buildings_meshes.js</code></td><td>320</td><td><code>FL.BUILDING_MESHES</code></td><td><code>buildFactionBuildings(pal, fk)</code> for 8 buildings + turret/dish heads + oil <code>outpost</code>; <code>buildPropMeshes()</code> for modular supply pallets &amp; rocks; <code>buildIconMeshes()</code> for spinning 3D wrench &amp; ⚡ icons.</td></tr>
+        <tr><td><code>js/sim.js</code></td><td>2133</td><td><code>FL.CONSTANTS</code>, <code>FL.RtsSimulation</code></td><td>Dynamic-size simulation (<code>loadMap</code>, <code>worldW/worldH</code>), HQ-only start, relative map-agnostic AI, depot-only supply &amp; per-building <code>queueUnit</code>, steering/collision, weapons, C&amp;C power rules, <code>1/2/3</code> kill veterancy.</td></tr>
+        <tr><td><code>js/renderer3d.js</code></td><td>1145</td><td><code>FL.Pixel3DRenderer</code></td><td>2-pass WebGL renderer: geometry+shadow FBO + height-contour outline post-pass, biome rock <code>uTint</code>, world icon pass, <code>bakeAllPortraits()</code>, and generic <code>bakeMeshIcon()</code> 32×32 cursor baker.</td></tr>
+        <tr><td><code>js/cursors.js</code></td><td>487</td><td><code>FL.CursorSystem</code></td><td>20 procedural 3D→Pixel hardware CSS cursors (faction pointers, UI, tactical orders, 8-dir edge-pan arrows), Fog-of-War-safe <code>resolveGameCursor()</code>, and <code>?cursors=1</code> contact sheet overlay.</td></tr>
+        <tr><td><code>js/fog.js</code></td><td>135</td><td><code>FL.FogOfWar</code></td><td>Dynamic <code>FOG_TILE = 32</code> visibility/explored grid with <code>resize(worldW, worldH)</code>; writes <code>Uint32Array</code> canvas texture.</td></tr>
         <tr><td><code>js/particles.js</code></td><td>132</td><td><code>FL.EffectsPool</code></td><td>Capped pools for particles (440), decals (260), rings (48), beams, and floating world texts.</td></tr>
         <tr><td><code>js/sound.js</code></td><td>230</td><td><code>FL.SoundEngine</code></td><td>Procedural oscillator + filtered white-noise Web Audio API effects unlocked on first pointer interaction.</td></tr>
-        <tr><td><code>js/renderer.js</code></td><td>609</td><td><code>FL.GameRenderer</code></td><td>Static <code>1200×800</code> terrain/concrete-pad canvas bake, world compositing, selection/placement chevron, <code>drawWorldBar</code>, <code>drawRepairBadge</code>, <code>drawLowPowerBadge</code>, minimap.</td></tr>
-        <tr><td><code>js/main.js</code></td><td>960</td><td><code>boot()</code></td><td>Canvas DPR resize loop, mouse edge-pan, desktop/touch camera pan &amp; pinch-zoom (<code>0.6..1.6</code>), hotkeys (incl. <code>R</code> rotate), context-sensitive <code>#unitDock</code> &amp; throttled <code>0.09s</code> <code>syncHud()</code>.</td></tr>
+        <tr><td><code>js/renderer.js</code></td><td>816</td><td><code>FL.GameRenderer</code></td><td>Dynamic biome/seed/road/pad terrain bake, world compositing, AABB clearance placement ghosts, <code>drawWorldBar</code>, dynamic-aspect minimap, and static <code>renderMapThumbnail()</code>.</td></tr>
+        <tr><td><code>js/main.js</code></td><td>1154</td><td><code>boot()</code></td><td>Title map selector + JSON import + <code>?map=</code> routing, contextual &amp; 8-dir edge-pan cursor sync, camera pan/zoom, hotkeys (incl. <code>R</code> rotate), context-sensitive <code>#unitDock</code> &amp; throttled <code>0.09s</code> <code>syncHud()</code>.</td></tr>
       </tbody>
     </table>
     <p class="ok"><strong>Service &amp; Deployment:</strong> Serve locally via <code>python3 -m http.server 8080</code>. Pushes to <code>origin/main</code> on <code>abdi787/iron-front-rts</code> deploy automatically via GitHub Pages (legacy root <code>/</code>).</p>
@@ -178,6 +197,8 @@ sy = (uEntityPos.y - uCamPos.y) + oy * 0.68 - oz * 0.73</pre>
       <li><strong>Post-pass (<code>POST_FRAG</code>):</strong> Samples 4 cardinal neighbors with <code>uTexel</code>. If <code>c.a &gt;= 0.56</code>, detects internal elevation steps (<code>stepH = 0.024</code>) to shade bottom-right rims darker (<code>0.72</code>) or top-left ledges brighter (<code>1.08</code>). Exterior pixels adjacent to solid geometry draw 1-texel dark ink <code>vec3(0.072, 0.066, 0.088)</code>; remaining ground shadows render at <code>0.36</code> alpha.</li>
       <li><strong>Zoom invariance (<code>PIXEL_WORLD = 1.0</code>):</strong> <code>renderScene()</code> allocates <code>fboW, fboH</code> directly in fixed world texels (capped by <code>maxTexSize</code> and world + 180px padding) and snaps <code>(wx0, wy0)</code> to integer <code>PIXEL_WORLD</code> boundaries to avoid pan shimmer. <code>GameRenderer.renderWorld</code> blits <code>scene.canvas</code> inside the active world camera matrix at <code>(scene.x, scene.y, scene.w, scene.h)</code> with <code>ctx.imageSmoothingEnabled = false</code>.</li>
       <li><strong>Cameo Portraits:</strong> Startup calls <code>renderer3d.bakeAllPortraits()</code>, rendering each of the 16 units + 7 buildable buildings per faction into <code>78×62</code> PNG data URLs stored on portrait cards.</li>
+      <li><strong>Biome Rock Tinting (<code>uTint</code>):</strong> <code>ENTITY_FRAG</code> multiplies <code>vCol * uTint</code>; rock meshes pass <code>biome.rockTint</code> so boulders shift naturally across Steppe, Desert, Tundra, Ashland, and Marsh without duplicating VBOs.</li>
+      <li><strong>3D→Pixel Hardware Cursors (<code>bakeMeshIcon</code> + <code>js/cursors.js</code>):</strong> <code>Pixel3DRenderer.bakeMeshIcon(parts, opts)</code> renders procedural <code>MeshBuilder</code> cursor meshes (faceted 3D arrowheads via <code>addFacetedDart</code>, reticles, crates, flags, wrenches, and 8-direction scroll chevrons) through the exact same 2-pass WebGL shadow + outline FBO into <code>32×32</code> PNG data URLs, then deletes temporary VBOs. <code>FL.CursorSystem</code> injects all 20 <code>--cur-*</code> CSS variables into <code>#ironFrontCursorStyles</code> for zero-latency hardware OS cursor rendering. Edge-pan arrows place their hotspot at the leading tip (e.g. <code>pan_e</code> at <code>27,16</code>) so the entire arrow stays inside the viewport when grazing screen borders. Inspect all 20 baked cursors &amp; hotspot crosshairs at 3× zoom via <a href="index.html?cursors=1" style="color:var(--cyan);"><code>index.html?cursors=1</code></a>.</li>
     </ul>
   </section>
 
@@ -185,10 +206,10 @@ sy = (uEntityPos.y - uCamPos.y) + oy * 0.68 - oz * 0.73</pre>
     <h2>4. Simulation Architecture, Power &amp; Repair Rules</h2>
     <h3>Core Loop &amp; Match Start (<code>RtsSimulation</code>)</h3>
     <ol>
-      <li><code>startNewGame()</code> spawns HQ-only bases (<code>hq</code> at SW <code>[360,1240]</code> and NE <code>[2040,360]</code>, <code>0</code> units) with starting supplies per difficulty; AI expands via <code>depot → motorpool → generator → bunkers</code>.</li>
+      <li><code>loadMap(rawMap)</code> expands JSON maps via <code>FL.MAPS.expandMap()</code>, updates <code>sim.worldW/worldH</code>, <code>playerSpawn</code>/<code>enemySpawn</code>, and resizes <code>FogOfWar</code>. <code>startNewGame(faction, diff, mapData)</code> spawns HQ-only bases at the map's spawn points (<code>0</code> units by default, plus optional <code>map.rules</code> scenario overrides); AI expands via relative anchor logic (<code>depot</code> near closest supplies → <code>motorpool</code> → <code>generator</code> → front <code>bunker</code>s, with spiral placement fallback).</li>
       <li>Clamp <code>dt = Math.min(0.05, Math.max(0, rawDt))</code>; pause/gameover short-circuits early.</li>
       <li>Clear transient frame flags: <code>repairBeams.length = 0</code>, all <code>b.isRepairing = false</code>, all <code>u.isRepairing = false</code> &amp; <code>u.repairKind = null</code>.</li>
-      <li>Run <code>updateCapturePoints(dt)</code> (3 oil outposts at <code>[760,560]</code>, <code>[1200,800]</code>, <code>[1640,1040]</code>), <code>updateSupportPowers(dt)</code>, <code>updateBuildings(dt)</code>, <code>updateUnits(dt)</code>, <code>resolveCollisions()</code>, <code>updateProjectiles(dt)</code>, <code>cleanupDestroyed(dt)</code>, <code>effects.update(dt)</code>.</li>
+      <li>Run <code>updateCapturePoints(dt)</code> (data-driven oil outposts from <code>map.capturePoints</code>), <code>updateSupportPowers(dt)</code>, <code>updateBuildings(dt)</code>, <code>updateUnits(dt)</code>, <code>resolveCollisions()</code>, <code>updateProjectiles(dt)</code>, <code>cleanupDestroyed(dt)</code>, <code>effects.update(dt)</code>.</li>
       <li>In active matches (<code>!demoMode</code>), add AI passive income, run <code>updateEnemyAi(dt)</code>, check win/loss (all enemy/player buildings koTimer&lt;=0 count === 0 triggers <code>1.2s</code> end delay), and refresh <code>FogOfWar</code>.</li>
     </ol>
 
@@ -252,11 +273,11 @@ sy = (uEntityPos.y - uCamPos.y) + oy * 0.68 - oz * 0.73</pre>
         <tr><td><code>hq</code></td><td>—</td><td>—</td><td>—</td><td>1500 / 44 / 90×90</td><td>+30</td><td>Enables base placement within 380u (does not produce or accept supplies).</td></tr>
         <tr><td><code>generator</code></td><td>4</td><td>110</td><td>3.4s</td><td>450 / 30 / 64×64</td><td>+50</td><td>Powers grid; highlighted pulsing red during Low Power.</td></tr>
         <tr><td><code>depot</code></td><td>5</td><td>230</td><td>5.0s</td><td>650 / 38 / 80×80</td><td>-15</td><td>Only supply dropoff &amp; harvester producer; spawns 1 free harvester upon completion along <code>facingRad</code>.</td></tr>
-        <tr><td><code>motorpool</code></td><td>6</td><td>275</td><td>6.0s</td><td>820 / 42 / 88×88</td><td>-20</td><td>Produces combat units (queue max 6); pauses on Low Power.</td></tr>
-        <tr><td><code>bunker</code></td><td>7</td><td>150</td><td>3.2s</td><td>420 / 24 / 50×50</td><td>-15</td><td>Base defense turret (range 290, dmg 25, cd 0.72s); off on Low Power.</td></tr>
-        <tr><td><code>workshop</code></td><td>8</td><td>195</td><td>4.3s</td><td>530 / 34 / 72×72</td><td>-15</td><td>Auto-repairs 1 ally within radius 195 (30 HP/s); off on Low Power.</td></tr>
-        <tr><td><code>command</code></td><td>9</td><td>315</td><td>5.6s</td><td>590 / 36 / 74×74</td><td>-25</td><td>Unlocks Tier-2 units, <code>heavyGun</code>, and <code>artilleryBarrage</code>.</td></tr>
-        <tr><td><code>heavyGun</code></td><td>0</td><td>290</td><td>4.2s</td><td>520 / 26 / 54×54</td><td>-25</td><td>Needs <code>command</code>. Range 365, dmg 70, cd 1.30s (Red shell splash 32 / Green instant ion beam).</td></tr>
+        <tr><td><code>motorpool</code></td><td>6</td><td>275</td><td>6.0s</td><td>820 / 42 / 88×88</td><td>-20</td><td>Requires <code>depot</code>. Produces combat units (queue max 6); pauses on Low Power.</td></tr>
+        <tr><td><code>bunker</code></td><td>7</td><td>150</td><td>3.2s</td><td>420 / 24 / 50×50</td><td>-15</td><td>Requires <code>depot</code>. Base defense turret (range 290, dmg 25, cd 0.72s); scans idly when powered, off on Low Power.</td></tr>
+        <tr><td><code>workshop</code></td><td>8</td><td>195</td><td>4.3s</td><td>530 / 34 / 72×72</td><td>-15</td><td>Requires <code>depot</code>. Auto-repairs 1 ally within radius 195 (30 HP/s); off on Low Power.</td></tr>
+        <tr><td><code>command</code></td><td>9</td><td>315</td><td>5.6s</td><td>590 / 36 / 74×74</td><td>-25</td><td>Requires <code>motorpool</code> (+ <code>depot</code>). Unlocks Tier-2 units, <code>heavyGun</code>, and <code>artilleryBarrage</code>.</td></tr>
+        <tr><td><code>heavyGun</code></td><td>0</td><td>290</td><td>4.2s</td><td>520 / 26 / 54×54</td><td>-25</td><td>Requires <code>command</code>. Range 365, dmg 70, cd 1.30s (Red shell splash 32 / Green instant ion beam); scans idly when powered.</td></tr>
       </tbody>
     </table>
     <p><strong>Support Powers:</strong> <code>reconSweep</code> (Key <code>T</code>, CD 35s, r360, 10s reveal) &amp; <code>artilleryBarrage</code> (Key <code>G</code>, requires <code>command</code> + grid powered, CD 55s, 2.0s delay, r160, 250 dmg).<br/>
@@ -268,12 +289,13 @@ sy = (uEntityPos.y - uCamPos.y) + oy * 0.68 - oz * 0.73</pre>
     <ul>
       <li><strong>World Canvas Entity Overlays (<code>js/renderer.js</code>):</strong>
         <ul>
-          <li><em>Above entities:</em> HP bar (shown when selected or damaged), gold rank pips, control-group digit, animated rocking wrench + <code>+</code> halo (<code>drawRepairBadge</code>), and blinking red <code>⚡</code> badge (<code>drawLowPowerBadge</code>) on offline completed buildings.</li>
-          <li><em>Directly beneath entities (<code>drawWorldBar</code>):</em> Horizontal status bars at <code>bBot = b.y + spec.radius * 0.68 + 4</code> and <code>uBot = u.y + spec.radius * 0.72 + 4</code> showing building construction progress + <code>%</code>, factory production queue + <code>×N</code> (or red striped <code>⚡</code> when offline), unit spawn progress, and green healing bars with inline animated <code>drawMiniWrench</code>.</li>
+          <li><em>Above entities:</em> HP bar (shown when selected or damaged), gold rank pips, control-group digit, plus spinning 3D pixel-art wrench (<code>repair_field</code> / <code>repair_auto</code>) and low-power <code>low_power</code> icons rendered through the WebGL FBO outline shader via <code>enqueueWorldIcon()</code> (unpowered completed buildings also tint slightly greyed-out via <code>uUnpowered</code>).</li>
+          <li><em>Directly beneath entities (<code>drawWorldBar</code>):</em> Horizontal status bars at <code>bBot = b.y + spec.radius * 0.68 + 4</code> and <code>uBot = u.y + spec.radius * 0.72 + 4</code> showing building construction progress + <code>%</code>, factory production queue + <code>×N</code> (or red striped <code>⚡</code> when offline), unit spawn progress, and unit repair bars (buildings show only HP bar + top wrench badge when repairing).</li>
         </ul>
       </li>
       <li><strong>Context-Sensitive Production Dock (<code>js/main.js</code>):</strong> <code>getSelectedProducer()</code> checks the selected friendly <code>depot</code> or <code>motorpool</code>. When none is selected, <code>#unitDock</code> shows a prompt hint; selecting <code>depot</code> reveals only the harvester card, selecting <code>motorpool</code> reveals the 7 combat unit cards, and clicks/hotkeys (<code>Q..M</code>) call <code>queueUnit(..., prod.id)</code> on that specific building. On compact viewports (<code>&lt;= 1240px</code>), selecting a producing building auto-switches to the <code>ТЕХНИКА</code> tab.</li>
-      <li><strong>Mouse Edge-Panning (<code>js/main.js</code>):</strong> Moving a mouse pointer within <code>28px</code> (X) / <code>20px</code> (Y) of viewport edges smoothly ramps camera scroll speed; interactive HUD elements block edge-scroll except the outer <code>10px</code> rim, and <code>mouseleave</code>/<code>blur</code>/active drags halt edge-scroll while keeping <code>lastHoverWorld</code> synced.</li>
+      <li><strong>Mouse Edge-Panning &amp; Contextual 3D→Pixel Cursors (<code>js/main.js</code> + <code>js/cursors.js</code>):</strong> Moving a mouse pointer within <code>28px</code> (X) / <code>20px</code> (Y) of viewport edges smoothly ramps camera scroll speed and sets <code>body[data-edge-cursor="pan_*"]</code> (8 directions: N/NE/E/SE/S/SW/W/NW), overriding HUD cursors on the outer <code>10px</code> rim. On the battlefield canvas, <code>resolveGameCursor()</code> switches hardware CSS cursors by priority: Drag Box (<code>select</code>) → Support Powers (<code>recon</code> / <code>strike</code>) → Building Placement (<code>build_ok</code> / <code>build_bad</code>) → Attack-Move (<code>attack</code>) → Fog-of-War-safe Enemy Hover (<code>attack</code>) → Harvester Supply/Wreck Hover (<code>harvest</code>) → Friendly Hover (<code>select</code>) → Selected Units Ground (<code>move</code>) → Selected Factory Ground (<code>rally</code>) → Faction Pointer (<code>default_red</code> / <code>default_green</code>). UI controls use brass <code>ui</code> (or <code>build_bad</code> when disabled); minimap uses <code>recon</code>.</li>
+      <li><strong>Title Screen Map Selector &amp; JSON Import (<code>js/main.js</code> + <code>js/renderer.js</code>):</strong> <code>#mapSelectStrip</code> displays built-in maps (from <code>maps/manifest.json</code> + <code>js/maps_builtin.js</code>), saved <code>localStorage</code> custom maps, and Map Maker drafts (<code>?map=draft</code>) with live <code>renderMapThumbnail()</code> previews. Selecting a map immediately reloads the animated title-screen demo battle in that sector's biome.</li>
       <li><strong>HUD Sync &amp; CSS Animation Safety (<code>js/main.js</code>):</strong> <code>syncHud()</code> runs every <code>0.09s</code>. <code>#selectionBar</code> caches structural signature <code>lastSelSig</code> so CSS keyframe animations (<code>.rep-wrench-svg</code> <code>wrenchRock</code>, <code>.pwr-off-badge</code>) do not reset every 90ms.</li>
       <li><strong>Orthogonal Building Placement:</strong> Players rotate buildings across <code>0° / 90° / 180° / 270°</code> via hotkey <code>R</code> or <code>#rotateModeBtn</code> on <code>#modeBanner</code>; green/red placement box draws a directional chevron indicating ramp/exit facing.</li>
       <li><strong>Controls:</strong> <code>LMB</code> drag box / double-click select type · <code>RMB</code> move/attack/rally/cancel · <code>Wheel</code>/2-finger pinch zoom (<code>0.6..1.6</code>) · <code>WASD</code>/Arrows &amp; mouse edge-pan · <code>1–3</code> / <code>Ctrl+1–3</code> squads · <code>Q..M</code> units · <code>4..0</code> buildings · <code>R</code> rotate · <code>F</code> attack-move · <code>H</code> hold · <code>T/G</code> powers · <code>Home</code> HQ · <code>P</code> pause · Touch 1-finger pan / hold-230ms selection box.</li>
@@ -297,15 +319,49 @@ sy = (uEntityPos.y - uCamPos.y) + oy * 0.68 - oz * 0.73</pre>
       <li>Add optional rotating head/turret logic in <code>enqueueBuilding</code> and entry in <code>bakeAllPortraits().bldCfg</code> inside <code>js/renderer3d.js</code>.</li>
     </ol>
 
+    <h3>Playbook: Creating a New Map (AI Agent &amp; Human Workflow)</h3>
+    <ol>
+      <li>Create a declarative JSON file in <code>maps/&lt;slug&gt;.json</code> using <code>schemaVersion: 1</code>. Supported biomes: <code>steppe</code>, <code>desert</code>, <code>tundra</code>, <code>ashland</code>, <code>marsh</code>. Sizes: <code>w ∈ [1200, 4800]</code>, <code>h ∈ [1000, 3600]</code>.</li>
+      <li><strong>Compact AI shortcut (<code>autoMirror</code>):</strong> Set <code>"symmetry": "point" | "x" | "y"</code> and <code>"autoMirror": true</code>, then define ONLY the player's half (1 <code>player</code> spawn, supplies, roads, obstacles, outposts). <code>FL.MAPS.expandMap()</code> mirrors everything automatically (skipping objects on the exact symmetry axis/center) and flips enemy HQ facing.</li>
+      <li>Add the filename to <code>maps/manifest.json</code> and run <code>node scripts/validate_maps.mjs --sync-builtin</code> to verify clearances, HQ build slots, economy balance, and 48px BFS reachability — and update the offline fallback <code>js/maps_builtin.js</code>.</li>
+      <li><strong>Visual polish (Human):</strong> Open <code>editor.html?map=&lt;id&gt;</code> to tweak rocks/roads/pads visually, verify live validator badges, click <strong>Тест-бой ▶</strong> (launches <code>index.html?map=draft</code>), or exchange JSON via the <strong>JSON</strong> modal.</li>
+    </ol>
+    <pre>{
+  "schemaVersion": 1,
+  "id": "twin-ridge",
+  "code": "СЕК-08",
+  "name": "Двойной хребет",
+  "size": { "w": 2400, "h": 1600 },
+  "biome": "tundra",
+  "seed": 5120,
+  "symmetry": "x",
+  "autoMirror": true,
+  "spawns": [{ "slot": "player", "x": 320, "y": 800, "facing": 0, "pad": true }],
+  "roads": [{ "width": 56, "smooth": true, "points": [[320, 800], [1200, 360], [2080, 800]] }],
+  "supplyClusters": [{ "x": 260, "y": 460, "count": 6, "amount": 850, "pattern": "standard" }],
+  "capturePoints": [{ "x": 1200, "y": 360, "radius": 74, "rate": 10 }],
+  "obstacles": [{ "kind": "rock", "x": 960, "y": 760, "radius": 32, "variant": 0 }]
+}</pre>
+
+    <h3>Playbook: Adding or Tuning a 3D→Pixel Cursor</h3>
+    <ol>
+      <li>Add a procedural 3D mesh builder in <code>js/cursors.js</code> (use <code>addFacetedDart</code> or <code>MeshBuilder</code> primitives; keep top-face quad winding counter-clockwise so normals point <code>+Z</code> toward the sky light).</li>
+      <li>Register it in <code>CursorSystem.bakeAll()</code> with exact pixel hotspot <code>(hx, hy)</code> inside <code>[0..31]</code> (tip hotspots for pointers and edge-pan arrows; <code>16,16</code> for centered reticles).</li>
+      <li>Wire its condition in <code>resolveGameCursor()</code> (guarding enemy/supply checks with <code>fog.isVisible</code> / <code>fog.isExplored</code>!) or <code>syncEditorCursor()</code> in <code>js/editor.js</code>.</li>
+      <li>Open <code>index.html?cursors=1</code> to visually inspect the 3× zoomed pixel output and cyan hotspot crosshair before committing.</li>
+    </ol>
+
     <div class="warn">
-      <strong>Top 6 Agent Pitfalls to Avoid:</strong>
+      <strong>Top 8 Agent Pitfalls to Avoid:</strong>
       <ol>
         <li><strong><code>depot</code> harvester timing:</strong> Free harvesters for newly placed <code>depot</code>s spawn upon construction completion (<code>buildProgress &gt;= 1</code> in <code>updateBuildings()</code>), along <code>b.facingRad</code> — matching power delta timing and preventing cancel/sell harvester exploits.</li>
         <li><strong>Do NOT break <code>PIXEL_WORLD</code>:</strong> Never tie FBO pixel density to <code>vw / cam.zoom</code>; keep <code>PIXEL_WORLD = 1.0</code> world-grid-snapped.</li>
         <li><strong>Avoid Low-Power softlocks:</strong> Always allow <code>hq</code> construction placement, <code>generator</code> building, and <code>depot</code> resource dropoff &amp; harvester production to operate regardless of power deficit.</li>
+        <li><strong>Never hardcode map bounds or base coordinates:</strong> Always use <code>sim.worldW/worldH</code> and <code>sim.playerSpawn/enemySpawn</code>; AI expansion in <code>updateEnemyAi()</code> must stay relative to its live HQ.</li>
+        <li><strong>Prevent Fog-of-War cursor leaks &amp; inverted normals:</strong> Never show <code>attack</code>/<code>harvest</code> cursors over unrevealed entities in <code>js/cursors.js</code>, and always wind custom top quads CCW in <code>MeshBuilder.pushFlatQuad()</code> (and remember <code>bevelWedge</code> takes <code>bev</code> before <code>col</code>!).</li>
         <li><strong>Keep <code>showcase.html</code> in sync manually:</strong> It has inline copies of <code>MeshBuilder</code>, shaders, and unit meshes; editing <code>js/*.js</code> alone does not update <code>showcase.html</code>.</li>
         <li><strong>Never overwrite active SVG animations every 90ms:</strong> Update text/widths in-place or gate <code>.innerHTML</code> behind signature equality in <code>syncHud()</code>.</li>
-        <li><strong>Verification on Termux:</strong> Node/headless browsers are absent in default Termux; validate edited HTML/CSS/JS syntax structure/balances via Python before committing and pushing to <code>abdi787/iron-front-rts</code>.</li>
+        <li><strong>Sync offline maps &amp; validate before push:</strong> Run <code>node scripts/validate_maps.mjs --sync-builtin</code> whenever editing <code>maps/*.json</code> or <code>maps/manifest.json</code>, and syntax-check all <code>js/*.js</code> before pushing to <code>abdi787/iron-front-rts</code>.</li>
       </ol>
     </div>
   </section>
