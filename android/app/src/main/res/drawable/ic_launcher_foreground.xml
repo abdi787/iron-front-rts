@@ -1,0 +1,27 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer brass tactical ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#EBB83A"
+        android:strokeWidth="4.5"
+        android:pathData="M54,24 A30,30 0 1,0 54,84 A30,30 0 1,0 54,24 Z" />
+    <!-- Red Dominion armored crest -->
+    <path
+        android:fillColor="#E0463C"
+        android:pathData="M34,42 L54,32 L74,42 L74,62 L54,76 L34,62 Z" />
+    <!-- Steel cannon turret silhouette -->
+    <path
+        android:fillColor="#F3E8D2"
+        android:pathData="M44,46 L64,46 L64,62 L44,62 Z" />
+    <path
+        android:fillColor="#EBB83A"
+        android:pathData="M51,28 L57,28 L57,54 L51,54 Z" />
+    <!-- Crosshair ticks -->
+    <path
+        android:fillColor="#EBB83A"
+        android:pathData="M52,18h4v9h-4z M52,81h4v9h-4z M18,52h9v4h-9z M81,52h9v4h-9z" />
+</vector>

@@ -425,8 +425,16 @@
       if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {});
       else document.exitFullscreen?.().catch(() => {});
     };
-    document.getElementById('titleFullscreenBtn').addEventListener('click', toggleFullscreen);
-    document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
+    const isNativeApp = window.location.hostname === 'appassets.androidplatform.net';
+    const titleFsBtn = document.getElementById('titleFullscreenBtn');
+    const hudFsBtn = document.getElementById('fullscreenBtn');
+    if (isNativeApp) {
+      titleFsBtn && titleFsBtn.classList.add('hidden');
+      hudFsBtn && hudFsBtn.classList.add('hidden');
+    } else {
+      titleFsBtn && titleFsBtn.addEventListener('click', toggleFullscreen);
+      hudFsBtn && hudFsBtn.addEventListener('click', toggleFullscreen);
+    }
 
     document.getElementById('baseJumpBtn').addEventListener('click', () => {
       const hq = sim.getPlayerHq();

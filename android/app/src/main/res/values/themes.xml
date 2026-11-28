@@ -1,0 +1,8 @@
+<resources>
+    <style name="Theme.IronFront" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">#161310</item>
+        <item name="android:statusBarColor">#161310</item>
+        <item name="android:navigationBarColor">#161310</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>

@@ -46,6 +46,14 @@ python3 -m http.server 8080
 
 После запуска откройте в браузере `http://localhost:8080/` (и `http://localhost:8080/showcase.html` для шоукейса).
 
+## Android APK (WebView-обёртка)
+В папке `android/` лежит нативная Kotlin-обёртка (полноэкранный ландшафтный режим + офлайн-раздача через `WebViewAssetLoader`), автоматически синхронизирующая веб-файлы из корня репозитория при сборке:
+
+```bash
+cd android && gradle assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
 ## Структура проекта
 ```text
 .
